@@ -1,0 +1,32 @@
+{
+  "name": "garage-billing-service",
+  "version": "1.0.0",
+  "description": "SOAT - Billing microsservice (quotes and payments)",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^7.6.0",
+    "amqplib": "^1.0.2",
+    "dd-trace": "^5.93.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "prisma": "^7.6.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.8",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^4.1.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}
