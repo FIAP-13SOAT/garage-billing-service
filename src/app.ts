@@ -5,6 +5,7 @@ import { AppError } from './shared/errors/AppError.js';
 
 const app = express();
 
+app.disable('x-powered-by');
 app.use(express.json());
 
 app.use('/health', healthResource);
