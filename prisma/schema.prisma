@@ -5,3 +5,53 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Quote {
+  id             String      @id @default(uuid())
+  serviceOrderId String      @unique
+  customerId     String
+  totalAmount    Float
+  status         QuoteStatus @default(PENDING)
+  createdAt      DateTime    @default(now())
+  items          QuoteItem[]
+  payment        Payment?
+}
+
+model QuoteItem {
+  id          String   @id @default(uuid())
+  quoteId     String
+  description String
+  unitPrice   Float
+  quantity    Int
+  type        ItemType
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  quoteId        String        @unique
+  serviceOrderId String        @unique
+  amount         Float
+  status         PaymentStatus @default(PENDING)
+  mercadoPagoId  String?
+  createdAt      DateTime      @default(now())
+  quote          Quote         @relation(fields: [quoteId], references: [id])
+}
+
+enum QuoteStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REFUSED
+  CANCELLED
+}
+
+enum ItemType {
+  SERVICE
+  STOCK_ITEM
+}

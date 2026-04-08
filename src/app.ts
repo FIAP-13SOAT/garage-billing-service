@@ -1,6 +1,6 @@
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import healthResource from './resources/healthResource.js';
+import healthResource from './adapters/inbound/rest/routes/healthResource.js';
 import { AppError } from './shared/errors/AppError.js';
 
 const app = express();

@@ -1,11 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-// PrismaClient reads DATABASE_URL from environment automatically
-export const prisma = new PrismaClient();
+const adapter = new PrismaPg(process.env.DATABASE_URL!);
+export const prisma = new PrismaClient({ adapter });
 
 export const connectDatabase = async (): Promise<void> => {
   await prisma.$connect();
-  console.debug('Database connected');
+  console.log('Database connected');
 };
 
 export const disconnectDatabase = async (): Promise<void> => {
