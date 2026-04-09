@@ -43,6 +43,14 @@ export class QuoteGateway {
     return record ? this.toEntity(record) : null;
   }
 
+  async findAll(): Promise<Quote[]> {
+    const records = await this.prisma.quote.findMany({
+      include: { items: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return records.map((r) => this.toEntity(r));
+  }
+
   async findByServiceOrderId(serviceOrderId: UUID): Promise<Quote | null> {
     const record = await this.prisma.quote.findUnique({
       where: { serviceOrderId },
