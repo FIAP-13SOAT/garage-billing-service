@@ -35,6 +35,11 @@ export class PaymentGateway {
     return record ? this.toEntity(record) : null;
   }
 
+  async findByMercadoPagoId(mercadoPagoId: string): Promise<Payment | null> {
+    const record = await this.prisma.payment.findFirst({ where: { mercadoPagoId } });
+    return record ? this.toEntity(record) : null;
+  }
+
   private toEntity(record: {
     id: string;
     quoteId: string;

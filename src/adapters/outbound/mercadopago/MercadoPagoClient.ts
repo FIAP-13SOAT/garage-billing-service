@@ -6,6 +6,11 @@ export type PaymentResult = {
   approved: boolean;
 };
 
+export type PaymentStatusResult = {
+  mercadoPagoId: string;
+  status: 'approved' | 'pending' | 'rejected' | 'cancelled' | string;
+};
+
 export class MercadoPagoClient {
   async processPayment(amount: number): Promise<PaymentResult> {
     if (env.mercadoPagoMock) {
@@ -34,6 +39,23 @@ export class MercadoPagoClient {
       mercadoPagoId: String(data.id),
       approved: data.status === 'approved',
     };
+  }
+
+  async getPayment(mercadoPagoId: string): Promise<PaymentStatusResult> {
+    if (env.mercadoPagoMock) {
+      return { mercadoPagoId, status: 'approved' };
+    }
+
+    const response = await fetch(`https://api.mercadopago.com/v1/payments/${mercadoPagoId}`, {
+      headers: { Authorization: `Bearer ${env.mercadoPagoToken}` },
+    });
+
+    if (!response.ok) {
+      return { mercadoPagoId, status: 'pending' };
+    }
+
+    const data = (await response.json()) as { id: number; status: string };
+    return { mercadoPagoId: String(data.id), status: data.status };
   }
 
   async cancelPayment(mercadoPagoId: string): Promise<void> {
