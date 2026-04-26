@@ -9,6 +9,8 @@ import type { UUID } from '../../shared/types/UUID.js';
 export type ProcessPaymentCommand = {
   quoteId: UUID;
   serviceOrderId: UUID;
+  payerEmail?: string;
+  payerDocument?: string;
 };
 
 export class ProcessPaymentUseCase {
@@ -31,7 +33,12 @@ export class ProcessPaymentUseCase {
       amount: quote.totalAmount,
     });
 
-    const result = await this.mercadoPagoClient.processPayment(payment.amount);
+    const payer =
+      command.payerEmail
+        ? { email: command.payerEmail, document: command.payerDocument }
+        : undefined;
+
+    const result = await this.mercadoPagoClient.processPayment(payment.amount, payer);
 
     if (result.approved) {
       payment.confirm(result.mercadoPagoId);

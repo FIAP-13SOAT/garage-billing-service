@@ -1,15 +1,27 @@
 import { env } from '../../../shared/config/env.js';
 import { newUUID } from '../../../shared/types/UUID.js';
 
+export type Payer = {
+  email: string;
+  document?: string;
+};
+
 export type PaymentResult = {
   mercadoPagoId: string;
   approved: boolean;
 };
 
 export class MercadoPagoClient {
-  async processPayment(amount: number): Promise<PaymentResult> {
+  async processPayment(amount: number, payer?: Payer): Promise<PaymentResult> {
     if (env.mercadoPagoMock) {
       return { mercadoPagoId: `MOCK-${newUUID()}`, approved: true };
+    }
+
+    const payerPayload: Record<string, unknown> = {
+      email: payer?.email ?? 'customer@garage.com',
+    };
+    if (payer?.document) {
+      payerPayload['identification'] = { type: 'CPF', number: payer.document };
     }
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -21,7 +33,7 @@ export class MercadoPagoClient {
       body: JSON.stringify({
         transaction_amount: amount,
         payment_method_id: 'pix',
-        payer: { email: 'customer@garage.com' },
+        payer: payerPayload,
       }),
     });
 
