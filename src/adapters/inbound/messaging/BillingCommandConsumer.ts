@@ -79,6 +79,8 @@ export class BillingCommandConsumer {
     const payment = await this.processPayment.execute({
       quoteId: payload.quoteId,
       serviceOrderId: payload.serviceOrderId,
+      payerEmail: payload.payerEmail,
+      payerDocument: payload.payerDocument,
     });
 
     if (payment.status === 'CONFIRMED') {

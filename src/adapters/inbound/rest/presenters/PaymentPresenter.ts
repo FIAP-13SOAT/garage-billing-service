@@ -1,0 +1,29 @@
+import type { Payment } from '../../../../domain/payment/Payment.js';
+
+type PaymentResponse = {
+  id: string;
+  serviceOrderId: string;
+  quoteId: string;
+  amount: number;
+  status: string;
+  mercadoPagoId: string | null;
+  qrCode: string | null;
+  qrCodeBase64: string | null;
+  createdAt: string;
+};
+
+export class PaymentPresenter {
+  static toResponse(payment: Payment): PaymentResponse {
+    return {
+      id: payment.id,
+      serviceOrderId: payment.serviceOrderId,
+      quoteId: payment.quoteId,
+      amount: payment.amount,
+      status: payment.status,
+      mercadoPagoId: payment.mercadoPagoId,
+      qrCode: payment.qrCode,
+      qrCodeBase64: payment.qrCodeBase64,
+      createdAt: payment.createdAt.toISOString(),
+    };
+  }
+}

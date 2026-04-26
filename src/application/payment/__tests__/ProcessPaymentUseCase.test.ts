@@ -77,7 +77,24 @@ describe('ProcessPaymentUseCase', () => {
 
     await new ProcessPaymentUseCase(mockPaymentGateway, mockQuoteGateway, mockMpClient).execute(command);
 
-    expect(mockMpClient.processPayment).toHaveBeenCalledWith(350);
+    expect(mockMpClient.processPayment).toHaveBeenCalledWith(350, undefined);
+  });
+
+  it('forwards payer data to MercadoPago when provided', async () => {
+    vi.mocked(mockQuoteGateway.findById).mockResolvedValue(makeQuote());
+    vi.mocked(mockMpClient.processPayment).mockResolvedValue({ mercadoPagoId: 'MP-1', approved: true });
+    vi.mocked(mockPaymentGateway.save).mockImplementation(async (p) => p);
+
+    await new ProcessPaymentUseCase(mockPaymentGateway, mockQuoteGateway, mockMpClient).execute({
+      ...command,
+      payerEmail: 'joao@email.com',
+      payerDocument: '12345678901',
+    });
+
+    expect(mockMpClient.processPayment).toHaveBeenCalledWith(
+      expect.any(Number),
+      { email: 'joao@email.com', document: '12345678901' },
+    );
   });
 
   it('saves a Payment entity', async () => {

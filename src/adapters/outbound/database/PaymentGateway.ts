@@ -16,10 +16,14 @@ export class PaymentGateway {
         amount: payment.amount,
         status: payment.status,
         mercadoPagoId: payment.mercadoPagoId,
+        qrCode: payment.qrCode,
+        qrCodeBase64: payment.qrCodeBase64,
       },
       update: {
         status: payment.status,
         mercadoPagoId: payment.mercadoPagoId,
+        qrCode: payment.qrCode,
+        qrCodeBase64: payment.qrCodeBase64,
       },
     });
     return this.toEntity(record);
@@ -35,6 +39,11 @@ export class PaymentGateway {
     return record ? this.toEntity(record) : null;
   }
 
+  async findByMercadoPagoId(mercadoPagoId: string): Promise<Payment | null> {
+    const record = await this.prisma.payment.findFirst({ where: { mercadoPagoId } });
+    return record ? this.toEntity(record) : null;
+  }
+
   private toEntity(record: {
     id: string;
     quoteId: string;
@@ -42,6 +51,8 @@ export class PaymentGateway {
     amount: number;
     status: string;
     mercadoPagoId: string | null;
+    qrCode: string | null;
+    qrCodeBase64: string | null;
     createdAt: Date;
   }): Payment {
     return new Payment({
@@ -51,6 +62,8 @@ export class PaymentGateway {
       amount: record.amount,
       status: record.status as PaymentStatus,
       mercadoPagoId: record.mercadoPagoId ?? undefined,
+      qrCode: record.qrCode ?? undefined,
+      qrCodeBase64: record.qrCodeBase64 ?? undefined,
       createdAt: record.createdAt,
     });
   }

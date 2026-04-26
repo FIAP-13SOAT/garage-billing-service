@@ -42,6 +42,8 @@ export interface GerarOrcamentoPayload {
 export interface ProcessarPagamentoPayload {
   serviceOrderId: UUID;
   quoteId: UUID;
+  payerEmail?: string;
+  payerDocument?: string;
 }
 
 export interface CancelarPagamentoPayload {
