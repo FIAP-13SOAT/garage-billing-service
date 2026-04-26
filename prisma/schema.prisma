@@ -28,14 +28,16 @@ model QuoteItem {
 }
 
 model Payment {
-  id             String        @id @default(uuid())
-  quoteId        String        @unique
-  serviceOrderId String        @unique
-  amount         Float
-  status         PaymentStatus @default(PENDING)
-  mercadoPagoId  String?
-  createdAt      DateTime      @default(now())
-  quote          Quote         @relation(fields: [quoteId], references: [id])
+  id              String        @id @default(uuid())
+  quoteId         String        @unique
+  serviceOrderId  String        @unique
+  amount          Float
+  status          PaymentStatus @default(PENDING)
+  mercadoPagoId   String?
+  qrCode          String?
+  qrCodeBase64    String?
+  createdAt       DateTime      @default(now())
+  quote           Quote         @relation(fields: [quoteId], references: [id])
 }
 
 enum QuoteStatus {

@@ -34,7 +34,7 @@ export class ProcessPaymentUseCase {
     const result = await this.mercadoPagoClient.processPayment(payment.amount);
 
     if (result.approved) {
-      payment.confirm(result.mercadoPagoId);
+      payment.confirm(result.mercadoPagoId, result.qrCode, result.qrCodeBase64);
     } else {
       payment.refuse();
     }

@@ -28,8 +28,11 @@ describe('Payment', () => {
       expect(payment.status).toBe(PaymentStatus.CONFIRMED);
     });
 
-    it('defaults mercadoPagoId to null', () => {
-      expect(makePayment().mercadoPagoId).toBeNull();
+    it('defaults mercadoPagoId, qrCode and qrCodeBase64 to null', () => {
+      const payment = makePayment();
+      expect(payment.mercadoPagoId).toBeNull();
+      expect(payment.qrCode).toBeNull();
+      expect(payment.qrCodeBase64).toBeNull();
     });
 
     it('preserves provided mercadoPagoId', () => {
@@ -44,6 +47,20 @@ describe('Payment', () => {
       payment.confirm('MP-999');
       expect(payment.status).toBe(PaymentStatus.CONFIRMED);
       expect(payment.mercadoPagoId).toBe('MP-999');
+    });
+
+    it('stores qrCode and qrCodeBase64 when provided', () => {
+      const payment = makePayment();
+      payment.confirm('MP-999', '00020126...pix', 'base64==');
+      expect(payment.qrCode).toBe('00020126...pix');
+      expect(payment.qrCodeBase64).toBe('base64==');
+    });
+
+    it('leaves qrCode null when not provided', () => {
+      const payment = makePayment();
+      payment.confirm('MP-999');
+      expect(payment.qrCode).toBeNull();
+      expect(payment.qrCodeBase64).toBeNull();
     });
 
     it.each([PaymentStatus.CONFIRMED, PaymentStatus.REFUSED, PaymentStatus.CANCELLED])(
