@@ -10,6 +10,8 @@ export interface PaymentProps {
   amount: number;
   status?: PaymentStatus;
   mercadoPagoId?: string;
+  qrCode?: string;
+  qrCodeBase64?: string;
   createdAt?: Date;
 }
 
@@ -20,6 +22,8 @@ export class Payment {
   readonly amount: number;
   status: PaymentStatus;
   mercadoPagoId: string | null;
+  qrCode: string | null;
+  qrCodeBase64: string | null;
   readonly createdAt: Date;
 
   constructor(props: PaymentProps) {
@@ -29,15 +33,19 @@ export class Payment {
     this.amount = props.amount;
     this.status = props.status ?? PaymentStatus.PENDING;
     this.mercadoPagoId = props.mercadoPagoId ?? null;
+    this.qrCode = props.qrCode ?? null;
+    this.qrCodeBase64 = props.qrCodeBase64 ?? null;
     this.createdAt = props.createdAt ?? new Date();
   }
 
-  confirm(mercadoPagoId: string): void {
+  confirm(mercadoPagoId: string, qrCode?: string, qrCodeBase64?: string): void {
     if (this.status !== PaymentStatus.PENDING) {
       throw new PaymentAlreadyProcessedException(this.status);
     }
     this.status = PaymentStatus.CONFIRMED;
     this.mercadoPagoId = mercadoPagoId;
+    this.qrCode = qrCode ?? null;
+    this.qrCodeBase64 = qrCodeBase64 ?? null;
   }
 
   refuse(): void {
