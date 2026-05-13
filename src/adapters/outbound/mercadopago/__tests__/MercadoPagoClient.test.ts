@@ -98,6 +98,17 @@ describe('MercadoPagoClient', () => {
       expect(body.notification_url).toBe('https://abcd.ngrok-free.app/webhook/mercadopago');
     });
 
+    it('defaults paymentLink/qrCode/qrCodeBase64 to empty string when MP omits transaction data', async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ id: 7 }));
+
+      const result = await new MercadoPagoClient().createPixPayment(100);
+
+      expect(result.mercadoPagoId).toBe('7');
+      expect(result.paymentLink).toBe('');
+      expect(result.qrCode).toBe('');
+      expect(result.qrCodeBase64).toBe('');
+    });
+
     it('throws MercadoPagoUnavailableError on 4xx (creation rejected)', async () => {
       mockFetch.mockResolvedValueOnce(errorResponse(422));
 
