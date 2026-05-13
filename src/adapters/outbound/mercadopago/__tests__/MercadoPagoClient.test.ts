@@ -4,7 +4,7 @@ import { MercadoPagoUnavailableError } from '../MercadoPagoUnavailableError.js';
 import { env } from '../../../../shared/config/env.js';
 
 vi.mock('../../../../shared/config/env.js', () => ({
-  env: { mercadoPagoMock: false, mercadoPagoToken: 'test-token' },
+  env: { mercadoPagoMock: false, mercadoPagoToken: 'test-token', mercadoPagoWebhookUrl: '' },
 }));
 
 // make all setTimeout delays instant so retry tests don't slow the suite
@@ -17,6 +17,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   env.mercadoPagoMock = false;
   env.mercadoPagoToken = 'test-token';
+  env.mercadoPagoWebhookUrl = '';
 });
 
 const okResponse = (body: object) => ({
@@ -33,110 +34,112 @@ const errorResponse = (status: number) => ({
   text: async () => 'error',
 });
 
+const mpPixBody = (id: number) => ({
+  id,
+  point_of_interaction: {
+    transaction_data: {
+      qr_code: 'QR',
+      qr_code_base64: 'B64',
+      ticket_url: `https://mp/checkout/${id}`,
+    },
+  },
+});
+
 describe('MercadoPagoClient', () => {
-  describe('processPayment', () => {
+  describe('createPixPayment', () => {
     it('returns mock data when mercadoPagoMock is enabled', async () => {
       env.mercadoPagoMock = true;
 
-      const result = await new MercadoPagoClient().processPayment(100);
+      const result = await new MercadoPagoClient().createPixPayment(100);
 
-      expect(result.approved).toBe(true);
       expect(result.mercadoPagoId).toMatch(/^MOCK-/);
+      expect(result.paymentLink).toMatch(/^https:\/\/mock\.mercadopago/);
       expect(result.qrCode).toBe('MOCK-QR-CODE');
+      expect(result.qrCodeBase64).toBe('MOCK-QR-BASE64');
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('returns approved=true when MP responds with status approved', async () => {
-      mockFetch.mockResolvedValueOnce(okResponse({ id: 42, status: 'approved' }));
+    it('returns mercadoPagoId and link/qr from MP response', async () => {
+      mockFetch.mockResolvedValueOnce(okResponse(mpPixBody(42)));
 
-      const result = await new MercadoPagoClient().processPayment(100);
+      const result = await new MercadoPagoClient().createPixPayment(100);
 
-      expect(result.approved).toBe(true);
       expect(result.mercadoPagoId).toBe('42');
-    });
-
-    it('includes qrCode and qrCodeBase64 from point_of_interaction', async () => {
-      mockFetch.mockResolvedValueOnce(okResponse({
-        id: 42,
-        status: 'approved',
-        point_of_interaction: { transaction_data: { qr_code: 'QR', qr_code_base64: 'B64' } },
-      }));
-
-      const result = await new MercadoPagoClient().processPayment(100);
-
+      expect(result.paymentLink).toBe('https://mp/checkout/42');
       expect(result.qrCode).toBe('QR');
       expect(result.qrCodeBase64).toBe('B64');
     });
 
     it('sends payer identification when document is provided', async () => {
-      mockFetch.mockResolvedValueOnce(okResponse({ id: 1, status: 'approved' }));
+      mockFetch.mockResolvedValueOnce(okResponse(mpPixBody(1)));
 
-      await new MercadoPagoClient().processPayment(100, { email: 'a@b.com', document: '12345678900' });
+      await new MercadoPagoClient().createPixPayment(100, { email: 'a@b.com', document: '12345678900' });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
       expect(body.payer.identification).toEqual({ type: 'CPF', number: '12345678900' });
     });
 
-    it('returns approved=false without retry on 4xx (client error)', async () => {
+    it('omits notification_url when MERCADO_PAGO_WEBHOOK_URL is empty', async () => {
+      mockFetch.mockResolvedValueOnce(okResponse(mpPixBody(1)));
+
+      await new MercadoPagoClient().createPixPayment(100);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+      expect(body.notification_url).to.equal(undefined);
+    });
+
+    it('forwards notification_url when MERCADO_PAGO_WEBHOOK_URL is set', async () => {
+      env.mercadoPagoWebhookUrl = 'https://abcd.ngrok-free.app/webhook/mercadopago';
+      mockFetch.mockResolvedValueOnce(okResponse(mpPixBody(1)));
+
+      await new MercadoPagoClient().createPixPayment(100);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+      expect(body.notification_url).toBe('https://abcd.ngrok-free.app/webhook/mercadopago');
+    });
+
+    it('defaults paymentLink/qrCode/qrCodeBase64 to empty string when MP omits transaction data', async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ id: 7 }));
+
+      const result = await new MercadoPagoClient().createPixPayment(100);
+
+      expect(result.mercadoPagoId).toBe('7');
+      expect(result.paymentLink).toBe('');
+      expect(result.qrCode).toBe('');
+      expect(result.qrCodeBase64).toBe('');
+    });
+
+    it('throws MercadoPagoUnavailableError on 4xx (creation rejected)', async () => {
       mockFetch.mockResolvedValueOnce(errorResponse(422));
 
-      const result = await new MercadoPagoClient().processPayment(100);
-
-      expect(result.approved).toBe(false);
+      await expect(new MercadoPagoClient().createPixPayment(100)).rejects.toThrow(MercadoPagoUnavailableError);
       expect(mockFetch).toHaveBeenCalledOnce();
     });
 
-    it('retries on 5xx and returns approved on eventual success', async () => {
+    it('retries on 5xx and succeeds eventually', async () => {
       mockFetch
         .mockResolvedValueOnce(errorResponse(503))
         .mockResolvedValueOnce(errorResponse(503))
-        .mockResolvedValueOnce(okResponse({ id: 99, status: 'approved' }));
+        .mockResolvedValueOnce(okResponse(mpPixBody(99)));
 
-      const result = await new MercadoPagoClient().processPayment(100);
+      const result = await new MercadoPagoClient().createPixPayment(100);
 
-      expect(result.approved).toBe(true);
+      expect(result.mercadoPagoId).toBe('99');
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
     it('throws MercadoPagoUnavailableError after exhausting all retries on 5xx', async () => {
       mockFetch.mockResolvedValue(errorResponse(503));
 
-      await expect(new MercadoPagoClient().processPayment(100)).rejects.toThrow(MercadoPagoUnavailableError);
+      await expect(new MercadoPagoClient().createPixPayment(100)).rejects.toThrow(MercadoPagoUnavailableError);
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
     it('throws MercadoPagoUnavailableError after exhausting retries on network failure', async () => {
       mockFetch.mockRejectedValue(new TypeError('fetch failed'));
 
-      await expect(new MercadoPagoClient().processPayment(100)).rejects.toThrow(MercadoPagoUnavailableError);
+      await expect(new MercadoPagoClient().createPixPayment(100)).rejects.toThrow(MercadoPagoUnavailableError);
       expect(mockFetch).toHaveBeenCalledTimes(3);
-    });
-  });
-
-  describe('getPayment', () => {
-    it('returns approved status when mercadoPagoMock is enabled', async () => {
-      env.mercadoPagoMock = true;
-
-      const result = await new MercadoPagoClient().getPayment('MP-123');
-
-      expect(result).toEqual({ mercadoPagoId: 'MP-123', status: 'approved' });
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('returns payment status from MP API', async () => {
-      mockFetch.mockResolvedValueOnce(okResponse({ id: 77, status: 'pending' }));
-
-      const result = await new MercadoPagoClient().getPayment('77');
-
-      expect(result).toEqual({ mercadoPagoId: '77', status: 'pending' });
-    });
-
-    it('returns pending when MP API responds with non-ok status', async () => {
-      mockFetch.mockResolvedValueOnce(errorResponse(404));
-
-      const result = await new MercadoPagoClient().getPayment('MP-999');
-
-      expect(result).toEqual({ mercadoPagoId: 'MP-999', status: 'pending' });
     });
   });
 

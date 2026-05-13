@@ -1,18 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenerateQuoteUseCase } from '../GenerateQuoteUseCase.js';
 import { Quote } from '../../../domain/quote/Quote.js';
-import { QuoteItem } from '../../../domain/quote/QuoteItem.js';
+import { Payment } from '../../../domain/payment/Payment.js';
 import { ItemType } from '../../../domain/quote/ItemType.js';
 import type { QuoteGateway } from '../../../adapters/outbound/database/QuoteGateway.js';
+import type { PaymentGateway } from '../../../adapters/outbound/database/PaymentGateway.js';
+import type { MercadoPagoClient } from '../../../adapters/outbound/mercadopago/MercadoPagoClient.js';
 import { toUUID } from '../../../shared/types/UUID.js';
 
-const mockGateway = {
+const mockQuoteGateway = {
   save: vi.fn(),
   findById: vi.fn(),
   findByServiceOrderId: vi.fn(),
 } as unknown as QuoteGateway;
 
-beforeEach(() => { vi.clearAllMocks(); });
+const mockPaymentGateway = {
+  save: vi.fn(),
+  findById: vi.fn(),
+  findByServiceOrderId: vi.fn(),
+  findByMercadoPagoId: vi.fn(),
+} as unknown as PaymentGateway;
+
+const mockMpClient = {
+  createPixPayment: vi.fn(),
+} as unknown as MercadoPagoClient;
+
+const mpResult = {
+  mercadoPagoId: 'MP-1',
+  paymentLink: 'https://mp/checkout/MP-1',
+  qrCode: 'QR',
+  qrCodeBase64: 'B64',
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(mockQuoteGateway.save).mockImplementation(async (q) => q);
+  vi.mocked(mockPaymentGateway.save).mockImplementation(async (p) => p);
+  vi.mocked(mockMpClient.createPixPayment).mockResolvedValue(mpResult);
+});
 
 const command = {
   serviceOrderId: toUUID('so-1'),
@@ -24,41 +49,48 @@ const command = {
 };
 
 describe('GenerateQuoteUseCase', () => {
-  it('creates a Quote from command items and saves it', async () => {
-    const savedQuote = new Quote({
-      serviceOrderId: toUUID(command.serviceOrderId),
-      customerId: toUUID(command.customerId),
-      items: command.items.map((i) => new QuoteItem(i)),
+  it('saves Quote, creates MP PIX and persists Payment with link/QR', async () => {
+    const result = await new GenerateQuoteUseCase(
+      mockQuoteGateway,
+      mockPaymentGateway,
+      mockMpClient,
+    ).execute(command);
+
+    expect(mockQuoteGateway.save).toHaveBeenCalledOnce();
+    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(120, undefined);
+    expect(mockPaymentGateway.save).toHaveBeenCalledOnce();
+
+    expect(result.quote).toBeInstanceOf(Quote);
+    expect(result.quote.totalAmount).toBe(120);
+    expect(result.payment).toBeInstanceOf(Payment);
+    expect(result.payment.mercadoPagoId).toBe('MP-1');
+    expect(result.payment.paymentLink).toBe('https://mp/checkout/MP-1');
+    expect(result.payment.qrCode).toBe('QR');
+    expect(result.payment.qrCodeBase64).toBe('B64');
+    expect(result.payment.quoteId).toBe(result.quote.id);
+  });
+
+  it('forwards payer email and document to MP when provided', async () => {
+    await new GenerateQuoteUseCase(mockQuoteGateway, mockPaymentGateway, mockMpClient).execute({
+      ...command,
+      payerEmail: 'a@b.com',
+      payerDocument: '12345678900',
     });
-    vi.mocked(mockGateway.save).mockResolvedValue(savedQuote);
 
-    const result = await new GenerateQuoteUseCase(mockGateway).execute(command);
-
-    expect(mockGateway.save).toHaveBeenCalledOnce();
-    const [passedQuote] = vi.mocked(mockGateway.save).mock.calls[0]!;
-    expect(passedQuote).toBeInstanceOf(Quote);
-    expect(passedQuote.serviceOrderId).toBe('so-1');
-    expect(passedQuote.customerId).toBe('cust-1');
-    expect(passedQuote.items).toHaveLength(2);
-    expect(result).toBe(savedQuote);
+    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(120, {
+      email: 'a@b.com',
+      document: '12345678900',
+    });
   });
 
-  it('calculates totalAmount correctly before saving', async () => {
-    vi.mocked(mockGateway.save).mockImplementation(async (q) => q);
+  it('creates Quote with zero total when items list is empty', async () => {
+    const result = await new GenerateQuoteUseCase(
+      mockQuoteGateway,
+      mockPaymentGateway,
+      mockMpClient,
+    ).execute({ ...command, items: [] });
 
-    await new GenerateQuoteUseCase(mockGateway).execute(command);
-
-    const [passedQuote] = vi.mocked(mockGateway.save).mock.calls[0]!;
-    expect(passedQuote.totalAmount).toBe(120); // 80*1 + 20*2
-  });
-
-  it('creates a Quote with zero totalAmount when items list is empty', async () => {
-    vi.mocked(mockGateway.save).mockImplementation(async (q) => q);
-
-    await new GenerateQuoteUseCase(mockGateway).execute({ ...command, items: [] });
-
-    const [passedQuote] = vi.mocked(mockGateway.save).mock.calls[0]!;
-    expect(passedQuote.totalAmount).toBe(0);
-    expect(passedQuote.items).toHaveLength(0);
+    expect(result.quote.totalAmount).toBe(0);
+    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(0, undefined);
   });
 });

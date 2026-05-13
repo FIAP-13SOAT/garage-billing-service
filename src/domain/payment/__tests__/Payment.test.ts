@@ -28,46 +28,40 @@ describe('Payment', () => {
       expect(payment.status).toBe(PaymentStatus.CONFIRMED);
     });
 
-    it('defaults mercadoPagoId, qrCode and qrCodeBase64 to null', () => {
+    it('defaults mercadoPagoId, paymentLink, qrCode and qrCodeBase64 to null', () => {
       const payment = makePayment();
       expect(payment.mercadoPagoId).toBeNull();
+      expect(payment.paymentLink).toBeNull();
       expect(payment.qrCode).toBeNull();
       expect(payment.qrCodeBase64).toBeNull();
     });
 
-    it('preserves provided mercadoPagoId', () => {
-      const payment = makePayment({ mercadoPagoId: 'MP-123' });
+    it('preserves provided mercadoPagoId, paymentLink, qrCode and qrCodeBase64', () => {
+      const payment = makePayment({
+        mercadoPagoId: 'MP-123',
+        paymentLink: 'https://mp/checkout/MP-123',
+        qrCode: 'BR-CODE',
+        qrCodeBase64: 'base64==',
+      });
       expect(payment.mercadoPagoId).toBe('MP-123');
+      expect(payment.paymentLink).toBe('https://mp/checkout/MP-123');
+      expect(payment.qrCode).toBe('BR-CODE');
+      expect(payment.qrCodeBase64).toBe('base64==');
     });
   });
 
   describe('confirm', () => {
-    it('transitions PENDING → CONFIRMED and sets mercadoPagoId', () => {
-      const payment = makePayment();
-      payment.confirm('MP-999');
+    it('transitions PENDING → CONFIRMED', () => {
+      const payment = makePayment({ mercadoPagoId: 'MP-999' });
+      payment.confirm();
       expect(payment.status).toBe(PaymentStatus.CONFIRMED);
-      expect(payment.mercadoPagoId).toBe('MP-999');
-    });
-
-    it('stores qrCode and qrCodeBase64 when provided', () => {
-      const payment = makePayment();
-      payment.confirm('MP-999', '00020126...pix', 'base64==');
-      expect(payment.qrCode).toBe('00020126...pix');
-      expect(payment.qrCodeBase64).toBe('base64==');
-    });
-
-    it('leaves qrCode null when not provided', () => {
-      const payment = makePayment();
-      payment.confirm('MP-999');
-      expect(payment.qrCode).toBeNull();
-      expect(payment.qrCodeBase64).toBeNull();
     });
 
     it.each([PaymentStatus.CONFIRMED, PaymentStatus.REFUSED, PaymentStatus.CANCELLED])(
       'throws PaymentAlreadyProcessedException when status is %s',
       (status) => {
         const payment = makePayment({ status });
-        expect(() => payment.confirm('MP-999')).toThrow(PaymentAlreadyProcessedException);
+        expect(() => payment.confirm()).toThrow(PaymentAlreadyProcessedException);
       },
     );
   });

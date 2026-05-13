@@ -4,7 +4,6 @@ import type { UUID } from '../../shared/types/UUID.js';
 
 export const BillingCommand = {
   GERAR_ORCAMENTO: 'GERAR_ORCAMENTO',
-  PROCESSAR_PAGAMENTO: 'PROCESSAR_PAGAMENTO',
   CANCELAR_PAGAMENTO: 'CANCELAR_PAGAMENTO',
 } as const;
 export type BillingCommand = (typeof BillingCommand)[keyof typeof BillingCommand];
@@ -37,11 +36,6 @@ export interface GerarOrcamentoPayload {
     quantity: number;
     type: 'SERVICE' | 'STOCK_ITEM';
   }>;
-}
-
-export interface ProcessarPagamentoPayload {
-  serviceOrderId: UUID;
-  quoteId: UUID;
   payerEmail?: string;
   payerDocument?: string;
 }
@@ -55,7 +49,10 @@ export interface CancelarPagamentoPayload {
 export interface OrcamentoGeradoPayload {
   serviceOrderId: UUID;
   quoteId: UUID;
+  paymentId: UUID;
   totalAmount: number;
+  paymentLink: string | null;
+  qrCode: string | null;
 }
 
 export interface PagamentoConfirmadoPayload {

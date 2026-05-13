@@ -1,7 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { Quote } from '../../../domain/quote/Quote.js';
 import { QuoteItem } from '../../../domain/quote/QuoteItem.js';
-import { QuoteStatus } from '../../../domain/quote/QuoteStatus.js';
 import { ItemType } from '../../../domain/quote/ItemType.js';
 import { type UUID, toUUID } from '../../../shared/types/UUID.js';
 
@@ -16,7 +15,6 @@ export class QuoteGateway {
         serviceOrderId: quote.serviceOrderId,
         customerId: quote.customerId,
         totalAmount: quote.totalAmount,
-        status: quote.status,
         items: {
           create: quote.items.map((item) => ({
             id: item.id,
@@ -27,9 +25,7 @@ export class QuoteGateway {
           })),
         },
       },
-      update: {
-        status: quote.status,
-      },
+      update: {},
       include: { items: true },
     });
     return this.toEntity(record);
@@ -64,7 +60,6 @@ export class QuoteGateway {
     serviceOrderId: string;
     customerId: string;
     totalAmount: number;
-    status: string;
     createdAt: Date;
     items: { id: string; description: string; unitPrice: number; quantity: number; type: string }[];
   }): Quote {
@@ -83,7 +78,6 @@ export class QuoteGateway {
       serviceOrderId: toUUID(record.serviceOrderId),
       customerId: toUUID(record.customerId),
       items,
-      status: record.status as QuoteStatus,
       createdAt: record.createdAt,
     });
   }

@@ -2,7 +2,6 @@ import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../../outbound/database/connection.js';
 import { PaymentGateway } from '../../../outbound/database/PaymentGateway.js';
-import { MercadoPagoClient } from '../../../outbound/mercadopago/MercadoPagoClient.js';
 import { BillingReplyProducer } from '../../../outbound/messaging/BillingReplyProducer.js';
 import { getRabbitMQChannel } from '../../../outbound/messaging/rabbitmq.js';
 import { HandleWebhookUseCase } from '../../../../application/payment/HandleWebhookUseCase.js';
@@ -19,15 +18,14 @@ router.post('/mercadopago', async (req: Request, res: Response, next: NextFuncti
     const body = req.body as MpWebhookBody;
     const mpId = body?.data?.id ? String(body.data.id) : null;
 
-    if (!mpId || body.action !== 'payment.updated') {
-      res.sendStatus(200); // acknowledge unknown events silently
+    if (!mpId) {
+      res.sendStatus(200);
       return;
     }
 
     const channel = await getRabbitMQChannel();
     const useCase = new HandleWebhookUseCase(
       new PaymentGateway(prisma),
-      new MercadoPagoClient(),
       new BillingReplyProducer(channel),
     );
 
