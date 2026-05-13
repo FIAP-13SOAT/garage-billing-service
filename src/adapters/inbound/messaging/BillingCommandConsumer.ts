@@ -1,4 +1,5 @@
 import type { Channel } from 'amqplib';
+import { setupQueue } from '../../outbound/messaging/setupQueue.js';
 import {
   BillingCommand,
   type SagaMessage,
@@ -25,7 +26,7 @@ export class BillingCommandConsumer {
   ) {}
 
   async start(): Promise<void> {
-    await this.channel.assertQueue(QUEUE, { durable: true });
+    await setupQueue(this.channel, QUEUE);
     await this.channel.consume(QUEUE, async (msg) => {
       if (!msg) return;
       try {
