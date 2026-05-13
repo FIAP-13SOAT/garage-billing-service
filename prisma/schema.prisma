@@ -11,7 +11,6 @@ model Quote {
   serviceOrderId String      @unique
   customerId     String
   totalAmount    Float
-  status         QuoteStatus @default(PENDING)
   createdAt      DateTime    @default(now())
   items          QuoteItem[]
   payment        Payment?
@@ -34,16 +33,11 @@ model Payment {
   amount          Float
   status          PaymentStatus @default(PENDING)
   mercadoPagoId   String?
+  paymentLink     String?
   qrCode          String?
   qrCodeBase64    String?
   createdAt       DateTime      @default(now())
   quote           Quote         @relation(fields: [quoteId], references: [id])
-}
-
-enum QuoteStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 enum PaymentStatus {

@@ -16,7 +16,6 @@ type QuoteResponse = {
   customerId: string;
   items: QuoteItemResponse[];
   totalAmount: number;
-  status: string;
   createdAt: string;
 };
 
@@ -28,7 +27,6 @@ export class QuotePresenter {
       customerId: quote.customerId,
       items: quote.items.map(QuotePresenter.toItemResponse),
       totalAmount: quote.totalAmount,
-      status: quote.status,
       createdAt: quote.createdAt.toISOString(),
     };
   }

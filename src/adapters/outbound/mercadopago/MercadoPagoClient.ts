@@ -7,25 +7,20 @@ export type Payer = {
   document?: string;
 };
 
-export type PaymentResult = {
+export type PixPaymentResult = {
   mercadoPagoId: string;
-  approved: boolean;
-  qrCode?: string;
-  qrCodeBase64?: string;
-};
-
-export type PaymentStatusResult = {
-  mercadoPagoId: string;
-  status: 'approved' | 'pending' | 'rejected' | 'cancelled' | string;
+  paymentLink: string;
+  qrCode: string;
+  qrCodeBase64: string;
 };
 
 type MpPaymentResponse = {
   id: number;
-  status: string;
   point_of_interaction?: {
     transaction_data?: {
       qr_code?: string;
       qr_code_base64?: string;
+      ticket_url?: string;
     };
   };
 };
@@ -51,11 +46,12 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
 }
 
 export class MercadoPagoClient {
-  async processPayment(amount: number, payer?: Payer): Promise<PaymentResult> {
+  async createPixPayment(amount: number, payer?: Payer): Promise<PixPaymentResult> {
     if (env.mercadoPagoMock) {
+      const id = `MOCK-${newUUID()}`;
       return {
-        mercadoPagoId: `MOCK-${newUUID()}`,
-        approved: true,
+        mercadoPagoId: id,
+        paymentLink: `https://mock.mercadopago/checkout/${id}`,
         qrCode: 'MOCK-QR-CODE',
         qrCodeBase64: 'MOCK-QR-BASE64',
       };
@@ -69,17 +65,22 @@ export class MercadoPagoClient {
     }
 
     return withRetry(async () => {
+      const body: Record<string, unknown> = {
+        transaction_amount: amount,
+        payment_method_id: 'pix',
+        payer: payerPayload,
+      };
+      if (env.mercadoPagoWebhookUrl) {
+        body['notification_url'] = env.mercadoPagoWebhookUrl;
+      }
+
       const response = await fetch('https://api.mercadopago.com/v1/payments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${env.mercadoPagoToken}`,
         },
-        body: JSON.stringify({
-          transaction_amount: amount,
-          payment_method_id: 'pix',
-          payer: payerPayload,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (response.status >= 500) {
@@ -88,8 +89,8 @@ export class MercadoPagoClient {
 
       if (!response.ok) {
         const body = await response.text();
-        console.error(`[MercadoPagoClient] processPayment rejected: status=${response.status} body=${body}`);
-        return { mercadoPagoId: '', approved: false };
+        console.error(`[MercadoPagoClient] createPixPayment failed: status=${response.status} body=${body}`);
+        throw new MercadoPagoUnavailableError(new Error(`MP rejected payment creation: ${response.status}`));
       }
 
       const data = (await response.json()) as MpPaymentResponse;
@@ -97,28 +98,11 @@ export class MercadoPagoClient {
 
       return {
         mercadoPagoId: String(data.id),
-        approved: data.status === 'approved',
-        qrCode: txData?.qr_code,
-        qrCodeBase64: txData?.qr_code_base64,
+        paymentLink: txData?.ticket_url ?? '',
+        qrCode: txData?.qr_code ?? '',
+        qrCodeBase64: txData?.qr_code_base64 ?? '',
       };
-    }, 'processPayment');
-  }
-
-  async getPayment(mercadoPagoId: string): Promise<PaymentStatusResult> {
-    if (env.mercadoPagoMock) {
-      return { mercadoPagoId, status: 'approved' };
-    }
-
-    const response = await fetch(`https://api.mercadopago.com/v1/payments/${mercadoPagoId}`, {
-      headers: { Authorization: `Bearer ${env.mercadoPagoToken}` },
-    });
-
-    if (!response.ok) {
-      return { mercadoPagoId, status: 'pending' };
-    }
-
-    const data = (await response.json()) as { id: number; status: string };
-    return { mercadoPagoId: String(data.id), status: data.status };
+    }, 'createPixPayment');
   }
 
   async cancelPayment(mercadoPagoId: string): Promise<void> {

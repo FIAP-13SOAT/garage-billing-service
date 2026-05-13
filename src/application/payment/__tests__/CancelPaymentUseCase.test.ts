@@ -9,7 +9,7 @@ import type { MercadoPagoClient } from '../../../adapters/outbound/mercadopago/M
 import { toUUID } from '../../../shared/types/UUID.js';
 
 const mockGateway = { save: vi.fn(), findById: vi.fn(), findByServiceOrderId: vi.fn() } as unknown as PaymentGateway;
-const mockMpClient = { processPayment: vi.fn(), cancelPayment: vi.fn() } as unknown as MercadoPagoClient;
+const mockMpClient = { createPixPayment: vi.fn(), cancelPayment: vi.fn() } as unknown as MercadoPagoClient;
 
 beforeEach(() => { vi.clearAllMocks(); });
 

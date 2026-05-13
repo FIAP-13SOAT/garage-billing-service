@@ -5,6 +5,7 @@ export const env = {
   rabbitmqUrl: process.env['RABBITMQ_URL'] ?? '',
   mercadoPagoMock: process.env['MERCADO_PAGO_MOCK'] === 'true',
   mercadoPagoToken: process.env['MERCADO_PAGO_ACCESS_TOKEN'] ?? '',
+  mercadoPagoWebhookUrl: process.env['MERCADO_PAGO_WEBHOOK_URL'] ?? '',
   datadog: {
     apiKey: process.env['DD_API_KEY'] ?? '',
     appKey: process.env['DD_APP_KEY'] ?? '',

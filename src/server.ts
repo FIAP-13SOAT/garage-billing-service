@@ -10,7 +10,6 @@ import { MercadoPagoClient } from './adapters/outbound/mercadopago/MercadoPagoCl
 import { BillingReplyProducer } from './adapters/outbound/messaging/BillingReplyProducer.js';
 import { BillingCommandConsumer } from './adapters/inbound/messaging/BillingCommandConsumer.js';
 import { GenerateQuoteUseCase } from './application/quote/GenerateQuoteUseCase.js';
-import { ProcessPaymentUseCase } from './application/payment/ProcessPaymentUseCase.js';
 import { CancelPaymentUseCase } from './application/payment/CancelPaymentUseCase.js';
 
 const start = async (): Promise<void> => {
@@ -25,8 +24,7 @@ const start = async (): Promise<void> => {
 
   const consumer = new BillingCommandConsumer(
     channel,
-    new GenerateQuoteUseCase(quoteGateway),
-    new ProcessPaymentUseCase(paymentGateway, quoteGateway, mpClient),
+    new GenerateQuoteUseCase(quoteGateway, paymentGateway, mpClient),
     new CancelPaymentUseCase(paymentGateway, mpClient),
     replyProducer,
   );
