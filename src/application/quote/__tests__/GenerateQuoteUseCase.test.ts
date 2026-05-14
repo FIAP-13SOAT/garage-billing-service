@@ -57,7 +57,15 @@ describe('GenerateQuoteUseCase', () => {
     ).execute(command);
 
     expect(mockQuoteGateway.save).toHaveBeenCalledOnce();
-    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(120, undefined);
+    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(
+      120,
+      expect.any(String),
+      expect.arrayContaining([
+        expect.objectContaining({ title: 'Oil change', quantity: 1, unitPrice: 80, categoryId: 'services' }),
+        expect.objectContaining({ title: 'Oil filter', quantity: 2, unitPrice: 20, categoryId: 'vehicles' }),
+      ]),
+      undefined,
+    );
     expect(mockPaymentGateway.save).toHaveBeenCalledOnce();
 
     expect(result.quote).toBeInstanceOf(Quote);
@@ -77,10 +85,12 @@ describe('GenerateQuoteUseCase', () => {
       payerDocument: '12345678900',
     });
 
-    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(120, {
-      email: 'a@b.com',
-      document: '12345678900',
-    });
+    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(
+      120,
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ email: 'a@b.com', document: '12345678900' }),
+    );
   });
 
   it('creates Quote with zero total when items list is empty', async () => {
@@ -91,6 +101,6 @@ describe('GenerateQuoteUseCase', () => {
     ).execute({ ...command, items: [] });
 
     expect(result.quote.totalAmount).toBe(0);
-    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(0, undefined);
+    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(0, expect.any(String), [], undefined);
   });
 });

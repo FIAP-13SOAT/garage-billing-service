@@ -37,6 +37,8 @@ export interface GerarOrcamentoPayload {
     type: 'SERVICE' | 'STOCK_ITEM';
   }>;
   payerEmail?: string;
+  payerFirstName?: string;
+  payerLastName?: string;
   payerDocument?: string;
 }
 

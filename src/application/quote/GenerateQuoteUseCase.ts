@@ -17,6 +17,8 @@ export type GenerateQuoteCommand = {
     type: ItemType;
   }[];
   payerEmail?: string;
+  payerFirstName?: string;
+  payerLastName?: string;
   payerDocument?: string;
 };
 
@@ -42,9 +44,29 @@ export class GenerateQuoteUseCase {
     const savedQuote = await this.quoteGateway.save(quote);
 
     const payer = command.payerEmail
-      ? { email: command.payerEmail, document: command.payerDocument }
+      ? {
+          email: command.payerEmail,
+          firstName: command.payerFirstName,
+          lastName: command.payerLastName,
+          document: command.payerDocument,
+        }
       : undefined;
-    const mpResult = await this.mercadoPagoClient.createPixPayment(savedQuote.totalAmount, payer);
+
+    const mpItems = savedQuote.items.map((i) => ({
+      id: i.id,
+      title: i.description,
+      description: i.description,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      categoryId: i.type === ItemType.SERVICE ? 'services' : 'vehicles',
+    }));
+
+    const mpResult = await this.mercadoPagoClient.createPixPayment(
+      savedQuote.totalAmount,
+      savedQuote.id,
+      mpItems,
+      payer,
+    );
 
     const payment = new Payment({
       quoteId: savedQuote.id,

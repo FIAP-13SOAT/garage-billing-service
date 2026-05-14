@@ -1,10 +1,24 @@
+import { MercadoPagoConfig, Payment } from 'mercadopago';
+import type { PaymentCreateRequest } from 'mercadopago';
 import { env } from '../../../shared/config/env.js';
+import { Logger } from '../../../shared/logger/Logger.js';
 import { newUUID } from '../../../shared/types/UUID.js';
 import { MercadoPagoUnavailableError } from './MercadoPagoUnavailableError.js';
 
 export type Payer = {
   email: string;
+  firstName?: string;
+  lastName?: string;
   document?: string;
+};
+
+export type PixPaymentItem = {
+  id: string;
+  title: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  categoryId: string;
 };
 
 export type PixPaymentResult = {
@@ -14,19 +28,17 @@ export type PixPaymentResult = {
   qrCodeBase64: string;
 };
 
-type MpPaymentResponse = {
-  id: number;
-  point_of_interaction?: {
-    transaction_data?: {
-      qr_code?: string;
-      qr_code_base64?: string;
-      ticket_url?: string;
-    };
-  };
-};
-
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 200;
+
+function isRetryableError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  if (err != null && typeof err === 'object') {
+    const status = (err as { status?: number }).status;
+    return typeof status === 'number' && status >= 500;
+  }
+  return false;
+}
 
 async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   let lastError: unknown;
@@ -35,10 +47,9 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
       return await fn();
     } catch (err) {
       lastError = err;
-      const isRetryable = err instanceof TypeError || (err instanceof Error && err.message.includes('fetch'));
-      if (!isRetryable) throw err;
+      if (!isRetryableError(err)) throw new MercadoPagoUnavailableError(err);
       const delay = BASE_DELAY_MS * 2 ** (attempt - 1);
-      console.error(`[MercadoPagoClient] ${label} attempt ${attempt} failed, retrying in ${delay}ms:`, err);
+      Logger.error(`[MercadoPagoClient] ${label} attempt ${attempt} failed, retrying in ${delay}ms`, { error: err });
       await new Promise((r) => setTimeout(r, delay));
     }
   }
@@ -46,8 +57,21 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
 }
 
 export class MercadoPagoClient {
-  async createPixPayment(amount: number, payer?: Payer): Promise<PixPaymentResult> {
+  private payment: Payment;
+
+  constructor() {
+    const config = new MercadoPagoConfig({ accessToken: env.mercadoPagoToken });
+    this.payment = new Payment(config);
+  }
+
+  async createPixPayment(
+    amount: number,
+    externalReference: string,
+    items: PixPaymentItem[],
+    payer?: Payer,
+  ): Promise<PixPaymentResult> {
     if (env.mercadoPagoMock) {
+      Logger.info('Mocking mercado pago integration');
       const id = `MOCK-${newUUID()}`;
       return {
         mercadoPagoId: id,
@@ -60,40 +84,39 @@ export class MercadoPagoClient {
     const payerPayload: Record<string, unknown> = {
       email: payer?.email ?? 'customer@garage.com',
     };
+
+    if (payer?.firstName) payerPayload['first_name'] = payer.firstName;
+    if (payer?.lastName) payerPayload['last_name'] = payer.lastName;
     if (payer?.document) {
       payerPayload['identification'] = { type: 'CPF', number: payer.document };
     }
 
     return withRetry(async () => {
-      const body: Record<string, unknown> = {
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      const body: PaymentCreateRequest = {
         transaction_amount: amount,
         payment_method_id: 'pix',
-        payer: payerPayload,
-      };
-      if (env.mercadoPagoWebhookUrl) {
-        body['notification_url'] = env.mercadoPagoWebhookUrl;
-      }
-
-      const response = await fetch('https://api.mercadopago.com/v1/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env.mercadoPagoToken}`,
+        date_of_expiration: expiresAt,
+        external_reference: externalReference,
+        payer: payerPayload as PaymentCreateRequest['payer'],
+        additional_info: {
+          items: items.map((i) => ({
+            id: i.id,
+            title: i.title,
+            description: i.description,
+            quantity: i.quantity,
+            unit_price: i.unitPrice,
+            category_id: i.categoryId,
+          })),
         },
-        body: JSON.stringify(body),
-      });
+      };
 
-      if (response.status >= 500) {
-        throw new TypeError(`MP server error: ${response.status}`);
+      if (env.mercadoPagoWebhookUrl) {
+        body.notification_url = env.mercadoPagoWebhookUrl;
       }
 
-      if (!response.ok) {
-        const body = await response.text();
-        console.error(`[MercadoPagoClient] createPixPayment failed: status=${response.status} body=${body}`);
-        throw new MercadoPagoUnavailableError(new Error(`MP rejected payment creation: ${response.status}`));
-      }
-
-      const data = (await response.json()) as MpPaymentResponse;
+      const data = await this.payment.create({ body });
       const txData = data.point_of_interaction?.transaction_data;
 
       return {
@@ -109,18 +132,7 @@ export class MercadoPagoClient {
     if (env.mercadoPagoMock) return;
 
     await withRetry(async () => {
-      const response = await fetch(`https://api.mercadopago.com/v1/payments/${mercadoPagoId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env.mercadoPagoToken}`,
-        },
-        body: JSON.stringify({ status: 'cancelled' }),
-      });
-
-      if (response.status >= 500) {
-        throw new TypeError(`MP server error: ${response.status}`);
-      }
+      await this.payment.cancel({ id: Number(mercadoPagoId) });
     }, 'cancelPayment');
   }
 }
