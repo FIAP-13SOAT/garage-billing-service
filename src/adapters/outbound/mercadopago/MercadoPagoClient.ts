@@ -1,5 +1,5 @@
 import { MercadoPagoConfig, Payment } from 'mercadopago';
-import type { PaymentCreateRequest } from 'mercadopago';
+import type { PaymentCreateRequest } from 'mercadopago/dist/clients/payment/create/types.js';
 import { env } from '../../../shared/config/env.js';
 import { Logger } from '../../../shared/logger/Logger.js';
 import { newUUID } from '../../../shared/types/UUID.js';
