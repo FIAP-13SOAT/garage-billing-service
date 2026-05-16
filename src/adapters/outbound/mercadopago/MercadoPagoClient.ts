@@ -1,5 +1,4 @@
-import { MercadoPagoConfig, Payment } from 'mercadopago';
-import type { PaymentCreateRequest } from 'mercadopago/dist/clients/payment/create/types.js';
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { env } from '../../../shared/config/env.js';
 import { Logger } from '../../../shared/logger/Logger.js';
 import { newUUID } from '../../../shared/types/UUID.js';
@@ -9,10 +8,9 @@ export type Payer = {
   email: string;
   firstName?: string;
   lastName?: string;
-  document?: string;
 };
 
-export type PixPaymentItem = {
+export type CheckoutItem = {
   id: string;
   title: string;
   description: string;
@@ -21,12 +19,11 @@ export type PixPaymentItem = {
   categoryId: string;
 };
 
-export type PixPaymentResult = {
-  mercadoPagoId: string;
-  paymentLink: string;
-  qrCode: string;
-  qrCodeBase64: string;
+export type CheckoutPreferenceResult = {
+  preferenceId: string;
+  checkoutUrl: string;
 };
+
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 200;
@@ -57,82 +54,53 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
 }
 
 export class MercadoPagoClient {
-  private payment: Payment;
+  private preference: Preference;
 
   constructor() {
     const config = new MercadoPagoConfig({ accessToken: env.mercadoPagoToken });
-    this.payment = new Payment(config);
+    this.preference = new Preference(config);
   }
 
-  async createPixPayment(
+  async createCheckoutPreference(
     amount: number,
     externalReference: string,
-    items: PixPaymentItem[],
+    items: CheckoutItem[],
     payer?: Payer,
-  ): Promise<PixPaymentResult> {
+  ): Promise<CheckoutPreferenceResult> {
     if (env.mercadoPagoMock) {
       Logger.info('Mocking mercado pago integration');
       const id = `MOCK-${newUUID()}`;
       return {
-        mercadoPagoId: id,
-        paymentLink: `https://mock.mercadopago/checkout/${id}`,
-        qrCode: 'MOCK-QR-CODE',
-        qrCodeBase64: 'MOCK-QR-BASE64',
+        preferenceId: id,
+        checkoutUrl: `https://mock.mercadopago/checkout/${id}`,
       };
-    }
-
-    const payerPayload: Record<string, unknown> = {
-      email: payer?.email ?? 'customer@garage.com',
-    };
-
-    if (payer?.firstName) payerPayload['first_name'] = payer.firstName;
-    if (payer?.lastName) payerPayload['last_name'] = payer.lastName;
-    if (payer?.document) {
-      payerPayload['identification'] = { type: 'CPF', number: payer.document };
     }
 
     return withRetry(async () => {
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-      const body: PaymentCreateRequest = {
-        transaction_amount: amount,
-        payment_method_id: 'pix',
-        date_of_expiration: expiresAt,
+      const body = {
+        items: items.map((i) => ({
+          id: i.id,
+          title: i.title,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unitPrice,
+          category_id: i.categoryId,
+          currency_id: 'BRL',
+        })),
+        payer: payer ? { email: payer.email } : undefined,
         external_reference: externalReference,
-        payer: payerPayload as PaymentCreateRequest['payer'],
-        additional_info: {
-          items: items.map((i) => ({
-            id: i.id,
-            title: i.title,
-            description: i.description,
-            quantity: i.quantity,
-            unit_price: i.unitPrice,
-            category_id: i.categoryId,
-          })),
-        },
+        ...(env.mercadoPagoWebhookUrl ? { notification_url: `${env.mercadoPagoWebhookUrl}?serviceOrderId=${externalReference}` } : {}),
       };
 
-      if (env.mercadoPagoWebhookUrl) {
-        body.notification_url = env.mercadoPagoWebhookUrl;
-      }
-
-      const data = await this.payment.create({ body });
-      const txData = data.point_of_interaction?.transaction_data;
+      const data = await this.preference.create({ body });
 
       return {
-        mercadoPagoId: String(data.id),
-        paymentLink: txData?.ticket_url ?? '',
-        qrCode: txData?.qr_code ?? '',
-        qrCodeBase64: txData?.qr_code_base64 ?? '',
+        preferenceId: data.id ?? '',
+        checkoutUrl: env.nodeEnv === 'production'
+          ? (data.init_point ?? '')
+          : (data.sandbox_init_point ?? ''),
       };
-    }, 'createPixPayment');
+    }, 'createCheckoutPreference');
   }
 
-  async cancelPayment(mercadoPagoId: string): Promise<void> {
-    if (env.mercadoPagoMock) return;
-
-    await withRetry(async () => {
-      await this.payment.cancel({ id: Number(mercadoPagoId) });
-    }, 'cancelPayment');
-  }
 }

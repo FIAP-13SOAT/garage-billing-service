@@ -10,7 +10,6 @@ const mockGateway = {
   save: vi.fn(),
   findById: vi.fn(),
   findByServiceOrderId: vi.fn(),
-  findByMercadoPagoId: vi.fn(),
 } as unknown as PaymentGateway;
 
 const mockReplyProducer = {
@@ -27,7 +26,7 @@ const makePendingPayment = () =>
     quoteId: toUUID('quote-1'),
     serviceOrderId: toUUID('so-1'),
     amount: 150,
-    mercadoPagoId: 'MP-123',
+    mercadoPagoId: 'pref-abc',
   });
 
 const useCase = () => new HandleWebhookUseCase(mockGateway, mockReplyProducer);
@@ -35,10 +34,10 @@ const useCase = () => new HandleWebhookUseCase(mockGateway, mockReplyProducer);
 describe('HandleWebhookUseCase', () => {
   it('confirms payment and emits PAGAMENTO_CONFIRMADO when webhook arrives', async () => {
     const payment = makePendingPayment();
-    vi.mocked(mockGateway.findByMercadoPagoId).mockResolvedValue(payment);
+    vi.mocked(mockGateway.findByServiceOrderId).mockResolvedValue(payment);
     vi.mocked(mockGateway.save).mockImplementation(async (p) => p);
 
-    await useCase().execute({ mercadoPagoId: 'MP-123' });
+    await useCase().execute({ serviceOrderId: 'so-1' });
 
     expect(payment.status).toBe(PaymentStatus.CONFIRMED);
     expect(mockGateway.save).toHaveBeenCalledOnce();
@@ -53,21 +52,20 @@ describe('HandleWebhookUseCase', () => {
       quoteId: toUUID('quote-1'),
       serviceOrderId: toUUID('so-1'),
       amount: 150,
-      mercadoPagoId: 'MP-123',
       status: PaymentStatus.CONFIRMED,
     });
-    vi.mocked(mockGateway.findByMercadoPagoId).mockResolvedValue(payment);
+    vi.mocked(mockGateway.findByServiceOrderId).mockResolvedValue(payment);
 
-    await useCase().execute({ mercadoPagoId: 'MP-123' });
+    await useCase().execute({ serviceOrderId: 'so-1' });
 
     expect(mockGateway.save).not.toHaveBeenCalled();
     expect(mockReplyProducer.sendPagamentoConfirmado).not.toHaveBeenCalled();
   });
 
-  it('ignores webhook when mercadoPagoId is not found in DB', async () => {
-    vi.mocked(mockGateway.findByMercadoPagoId).mockResolvedValue(null);
+  it('ignores webhook when serviceOrderId is not found in DB', async () => {
+    vi.mocked(mockGateway.findByServiceOrderId).mockResolvedValue(null);
 
-    await useCase().execute({ mercadoPagoId: 'UNKNOWN-999' });
+    await useCase().execute({ serviceOrderId: 'so-unknown' });
 
     expect(mockGateway.save).not.toHaveBeenCalled();
     expect(mockReplyProducer.sendPagamentoConfirmado).not.toHaveBeenCalled();

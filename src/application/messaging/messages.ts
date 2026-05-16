@@ -54,7 +54,6 @@ export interface OrcamentoGeradoPayload {
   paymentId: UUID;
   totalAmount: number;
   paymentLink: string | null;
-  qrCode: string | null;
 }
 
 export interface PagamentoConfirmadoPayload {

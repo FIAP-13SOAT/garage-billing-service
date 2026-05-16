@@ -26,7 +26,7 @@ const start = async (): Promise<void> => {
   const consumer = new BillingCommandConsumer(
     channel,
     new GenerateQuoteUseCase(quoteGateway, paymentGateway, mpClient),
-    new CancelPaymentUseCase(paymentGateway, mpClient),
+    new CancelPaymentUseCase(paymentGateway),
     replyProducer,
   );
 

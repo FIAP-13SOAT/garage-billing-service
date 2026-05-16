@@ -17,15 +17,11 @@ export class PaymentGateway {
         status: payment.status,
         mercadoPagoId: payment.mercadoPagoId,
         paymentLink: payment.paymentLink,
-        qrCode: payment.qrCode,
-        qrCodeBase64: payment.qrCodeBase64,
       },
       update: {
         status: payment.status,
         mercadoPagoId: payment.mercadoPagoId,
         paymentLink: payment.paymentLink,
-        qrCode: payment.qrCode,
-        qrCodeBase64: payment.qrCodeBase64,
       },
     });
     return this.toEntity(record);
@@ -54,8 +50,6 @@ export class PaymentGateway {
     status: string;
     mercadoPagoId: string | null;
     paymentLink: string | null;
-    qrCode: string | null;
-    qrCodeBase64: string | null;
     createdAt: Date;
   }): Payment {
     return new Payment({
@@ -66,8 +60,6 @@ export class PaymentGateway {
       status: record.status as PaymentStatus,
       mercadoPagoId: record.mercadoPagoId ?? undefined,
       paymentLink: record.paymentLink ?? undefined,
-      qrCode: record.qrCode ?? undefined,
-      qrCodeBase64: record.qrCodeBase64 ?? undefined,
       createdAt: record.createdAt,
     });
   }

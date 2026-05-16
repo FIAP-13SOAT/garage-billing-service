@@ -5,20 +5,31 @@ import { PaymentGateway } from '../../../outbound/database/PaymentGateway.js';
 import { BillingReplyProducer } from '../../../outbound/messaging/BillingReplyProducer.js';
 import { getRabbitMQChannel } from '../../../outbound/messaging/rabbitmq.js';
 import { HandleWebhookUseCase } from '../../../../application/payment/HandleWebhookUseCase.js';
+import { Logger } from '../../../../shared/logger/Logger.js';
 
 const router = Router();
 
-type MpWebhookBody = {
-  action?: string;
-  data?: { id?: string | number };
-};
-
 router.post('/mercadopago', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const body = req.body as MpWebhookBody;
-    const mpId = body?.data?.id ? String(body.data.id) : null;
+    const serviceOrderId = req.query['serviceOrderId'] as string | undefined;
 
-    if (!mpId) {
+    const topic = req.query['topic'] as string | undefined;
+
+    Logger.info('[Webhook] Mercado Pago notification received', {
+      query: req.query,
+      body: req.body,
+      topic,
+      serviceOrderId,
+    });
+
+    if (!serviceOrderId) {
+      Logger.warn('[Webhook] No serviceOrderId in query params, ignoring');
+      res.sendStatus(200);
+      return;
+    }
+
+    if (topic !== 'payment') {
+      Logger.info('[Webhook] Ignoring non-payment notification', { topic });
       res.sendStatus(200);
       return;
     }
@@ -29,7 +40,7 @@ router.post('/mercadopago', async (req: Request, res: Response, next: NextFuncti
       new BillingReplyProducer(channel),
     );
 
-    await useCase.execute({ mercadoPagoId: mpId });
+    await useCase.execute({ serviceOrderId });
     res.sendStatus(200);
   } catch (err) { next(err); }
 });

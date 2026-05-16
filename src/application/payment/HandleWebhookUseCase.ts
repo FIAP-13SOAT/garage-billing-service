@@ -1,9 +1,10 @@
 import type { PaymentGateway } from '../../adapters/outbound/database/PaymentGateway.js';
 import type { BillingReplyProducer } from '../../adapters/outbound/messaging/BillingReplyProducer.js';
 import { PaymentStatus } from '../../domain/payment/PaymentStatus.js';
+import { toUUID } from '../../shared/types/UUID.js';
 
 export type HandleWebhookCommand = {
-  mercadoPagoId: string;
+  serviceOrderId: string;
 };
 
 export class HandleWebhookUseCase {
@@ -13,7 +14,7 @@ export class HandleWebhookUseCase {
   ) {}
 
   async execute(command: HandleWebhookCommand): Promise<void> {
-    const payment = await this.paymentGateway.findByMercadoPagoId(command.mercadoPagoId);
+    const payment = await this.paymentGateway.findByServiceOrderId(toUUID(command.serviceOrderId));
     if (!payment) return;
     if (payment.status !== PaymentStatus.PENDING) return;
 

@@ -74,7 +74,6 @@ export class BillingCommandConsumer {
       paymentId: payment.id,
       totalAmount: quote.totalAmount,
       paymentLink: payment.paymentLink,
-      qrCode: payment.qrCode,
     });
   }
 

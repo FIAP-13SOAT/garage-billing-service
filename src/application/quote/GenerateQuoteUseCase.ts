@@ -4,7 +4,7 @@ import { ItemType } from '../../domain/quote/ItemType.js';
 import { Payment } from '../../domain/payment/Payment.js';
 import type { QuoteGateway } from '../../adapters/outbound/database/QuoteGateway.js';
 import type { PaymentGateway } from '../../adapters/outbound/database/PaymentGateway.js';
-import type { MercadoPagoClient } from '../../adapters/outbound/mercadopago/MercadoPagoClient.js';
+import type { MercadoPagoClient, CheckoutItem } from '../../adapters/outbound/mercadopago/MercadoPagoClient.js';
 import type { UUID } from '../../shared/types/UUID.js';
 
 export type GenerateQuoteCommand = {
@@ -52,7 +52,7 @@ export class GenerateQuoteUseCase {
         }
       : undefined;
 
-    const mpItems = savedQuote.items.map((i) => ({
+    const mpItems: CheckoutItem[] = savedQuote.items.map((i) => ({
       id: i.id,
       title: i.description,
       description: i.description,
@@ -61,9 +61,9 @@ export class GenerateQuoteUseCase {
       categoryId: i.type === ItemType.SERVICE ? 'services' : 'vehicles',
     }));
 
-    const mpResult = await this.mercadoPagoClient.createPixPayment(
+    const mpResult = await this.mercadoPagoClient.createCheckoutPreference(
       savedQuote.totalAmount,
-      savedQuote.id,
+      savedQuote.serviceOrderId,
       mpItems,
       payer,
     );
@@ -72,10 +72,8 @@ export class GenerateQuoteUseCase {
       quoteId: savedQuote.id,
       serviceOrderId: savedQuote.serviceOrderId,
       amount: savedQuote.totalAmount,
-      mercadoPagoId: mpResult.mercadoPagoId,
-      paymentLink: mpResult.paymentLink,
-      qrCode: mpResult.qrCode,
-      qrCodeBase64: mpResult.qrCodeBase64,
+      mercadoPagoId: mpResult.preferenceId,
+      paymentLink: mpResult.checkoutUrl,
     });
     const savedPayment = await this.paymentGateway.save(payment);
 
