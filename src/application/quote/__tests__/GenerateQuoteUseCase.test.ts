@@ -22,21 +22,19 @@ const mockPaymentGateway = {
 } as unknown as PaymentGateway;
 
 const mockMpClient = {
-  createPixPayment: vi.fn(),
+  createCheckoutPreference: vi.fn(),
 } as unknown as MercadoPagoClient;
 
 const mpResult = {
-  mercadoPagoId: 'MP-1',
-  paymentLink: 'https://mp/checkout/MP-1',
-  qrCode: 'QR',
-  qrCodeBase64: 'B64',
+  preferenceId: 'pref-123',
+  checkoutUrl: 'https://sandbox.mercadopago.com.br/checkout?pref_id=pref-123',
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(mockQuoteGateway.save).mockImplementation(async (q) => q);
   vi.mocked(mockPaymentGateway.save).mockImplementation(async (p) => p);
-  vi.mocked(mockMpClient.createPixPayment).mockResolvedValue(mpResult);
+  vi.mocked(mockMpClient.createCheckoutPreference).mockResolvedValue(mpResult);
 });
 
 const command = {
@@ -49,7 +47,7 @@ const command = {
 };
 
 describe('GenerateQuoteUseCase', () => {
-  it('saves Quote, creates MP PIX and persists Payment with link/QR', async () => {
+  it('saves Quote, creates checkout preference and persists Payment with link', async () => {
     const result = await new GenerateQuoteUseCase(
       mockQuoteGateway,
       mockPaymentGateway,
@@ -57,30 +55,37 @@ describe('GenerateQuoteUseCase', () => {
     ).execute(command);
 
     expect(mockQuoteGateway.save).toHaveBeenCalledOnce();
-    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(120, undefined);
+    expect(mockMpClient.createCheckoutPreference).toHaveBeenCalledWith(
+      120,
+      toUUID('so-1'),
+      expect.arrayContaining([
+        expect.objectContaining({ title: 'Oil change', quantity: 1, unitPrice: 80, categoryId: 'services' }),
+        expect.objectContaining({ title: 'Oil filter', quantity: 2, unitPrice: 20, categoryId: 'vehicles' }),
+      ]),
+      undefined,
+    );
     expect(mockPaymentGateway.save).toHaveBeenCalledOnce();
 
     expect(result.quote).toBeInstanceOf(Quote);
     expect(result.quote.totalAmount).toBe(120);
     expect(result.payment).toBeInstanceOf(Payment);
-    expect(result.payment.mercadoPagoId).toBe('MP-1');
-    expect(result.payment.paymentLink).toBe('https://mp/checkout/MP-1');
-    expect(result.payment.qrCode).toBe('QR');
-    expect(result.payment.qrCodeBase64).toBe('B64');
+    expect(result.payment.mercadoPagoId).toBe('pref-123');
+    expect(result.payment.paymentLink).toBe('https://sandbox.mercadopago.com.br/checkout?pref_id=pref-123');
     expect(result.payment.quoteId).toBe(result.quote.id);
   });
 
-  it('forwards payer email and document to MP when provided', async () => {
+  it('forwards payer email to MP when provided', async () => {
     await new GenerateQuoteUseCase(mockQuoteGateway, mockPaymentGateway, mockMpClient).execute({
       ...command,
       payerEmail: 'a@b.com',
-      payerDocument: '12345678900',
     });
 
-    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(120, {
-      email: 'a@b.com',
-      document: '12345678900',
-    });
+    expect(mockMpClient.createCheckoutPreference).toHaveBeenCalledWith(
+      120,
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ email: 'a@b.com' }),
+    );
   });
 
   it('creates Quote with zero total when items list is empty', async () => {
@@ -91,6 +96,6 @@ describe('GenerateQuoteUseCase', () => {
     ).execute({ ...command, items: [] });
 
     expect(result.quote.totalAmount).toBe(0);
-    expect(mockMpClient.createPixPayment).toHaveBeenCalledWith(0, undefined);
+    expect(mockMpClient.createCheckoutPreference).toHaveBeenCalledWith(0, expect.any(String), [], undefined);
   });
 });

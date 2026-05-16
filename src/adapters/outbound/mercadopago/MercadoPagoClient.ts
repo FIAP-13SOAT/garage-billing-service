@@ -1,32 +1,41 @@
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { env } from '../../../shared/config/env.js';
+import { Logger } from '../../../shared/logger/Logger.js';
 import { newUUID } from '../../../shared/types/UUID.js';
 import { MercadoPagoUnavailableError } from './MercadoPagoUnavailableError.js';
 
 export type Payer = {
   email: string;
-  document?: string;
+  firstName?: string;
+  lastName?: string;
 };
 
-export type PixPaymentResult = {
-  mercadoPagoId: string;
-  paymentLink: string;
-  qrCode: string;
-  qrCodeBase64: string;
+export type CheckoutItem = {
+  id: string;
+  title: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  categoryId: string;
 };
 
-type MpPaymentResponse = {
-  id: number;
-  point_of_interaction?: {
-    transaction_data?: {
-      qr_code?: string;
-      qr_code_base64?: string;
-      ticket_url?: string;
-    };
-  };
+export type CheckoutPreferenceResult = {
+  preferenceId: string;
+  checkoutUrl: string;
 };
+
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 200;
+
+function isRetryableError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  if (err != null && typeof err === 'object') {
+    const status = (err as { status?: number }).status;
+    return typeof status === 'number' && status >= 500;
+  }
+  return false;
+}
 
 async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   let lastError: unknown;
@@ -35,10 +44,9 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
       return await fn();
     } catch (err) {
       lastError = err;
-      const isRetryable = err instanceof TypeError || (err instanceof Error && err.message.includes('fetch'));
-      if (!isRetryable) throw err;
+      if (!isRetryableError(err)) throw new MercadoPagoUnavailableError(err);
       const delay = BASE_DELAY_MS * 2 ** (attempt - 1);
-      console.error(`[MercadoPagoClient] ${label} attempt ${attempt} failed, retrying in ${delay}ms:`, err);
+      Logger.error(`[MercadoPagoClient] ${label} attempt ${attempt} failed, retrying in ${delay}ms`, { error: err });
       await new Promise((r) => setTimeout(r, delay));
     }
   }
@@ -46,81 +54,53 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
 }
 
 export class MercadoPagoClient {
-  async createPixPayment(amount: number, payer?: Payer): Promise<PixPaymentResult> {
+  private preference: Preference;
+
+  constructor() {
+    const config = new MercadoPagoConfig({ accessToken: env.mercadoPagoToken });
+    this.preference = new Preference(config);
+  }
+
+  async createCheckoutPreference(
+    amount: number,
+    externalReference: string,
+    items: CheckoutItem[],
+    payer?: Payer,
+  ): Promise<CheckoutPreferenceResult> {
     if (env.mercadoPagoMock) {
+      Logger.info('Mocking mercado pago integration');
       const id = `MOCK-${newUUID()}`;
       return {
-        mercadoPagoId: id,
-        paymentLink: `https://mock.mercadopago/checkout/${id}`,
-        qrCode: 'MOCK-QR-CODE',
-        qrCodeBase64: 'MOCK-QR-BASE64',
+        preferenceId: id,
+        checkoutUrl: `https://mock.mercadopago/checkout/${id}`,
       };
-    }
-
-    const payerPayload: Record<string, unknown> = {
-      email: payer?.email ?? 'customer@garage.com',
-    };
-    if (payer?.document) {
-      payerPayload['identification'] = { type: 'CPF', number: payer.document };
     }
 
     return withRetry(async () => {
-      const body: Record<string, unknown> = {
-        transaction_amount: amount,
-        payment_method_id: 'pix',
-        payer: payerPayload,
+      const body = {
+        items: items.map((i) => ({
+          id: i.id,
+          title: i.title,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unitPrice,
+          category_id: i.categoryId,
+          currency_id: 'BRL',
+        })),
+        payer: payer ? { email: payer.email } : undefined,
+        external_reference: externalReference,
+        ...(env.mercadoPagoWebhookUrl ? { notification_url: `${env.mercadoPagoWebhookUrl}?serviceOrderId=${externalReference}` } : {}),
       };
-      if (env.mercadoPagoWebhookUrl) {
-        body['notification_url'] = env.mercadoPagoWebhookUrl;
-      }
 
-      const response = await fetch('https://api.mercadopago.com/v1/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env.mercadoPagoToken}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (response.status >= 500) {
-        throw new TypeError(`MP server error: ${response.status}`);
-      }
-
-      if (!response.ok) {
-        const body = await response.text();
-        console.error(`[MercadoPagoClient] createPixPayment failed: status=${response.status} body=${body}`);
-        throw new MercadoPagoUnavailableError(new Error(`MP rejected payment creation: ${response.status}`));
-      }
-
-      const data = (await response.json()) as MpPaymentResponse;
-      const txData = data.point_of_interaction?.transaction_data;
+      const data = await this.preference.create({ body });
 
       return {
-        mercadoPagoId: String(data.id),
-        paymentLink: txData?.ticket_url ?? '',
-        qrCode: txData?.qr_code ?? '',
-        qrCodeBase64: txData?.qr_code_base64 ?? '',
+        preferenceId: data.id ?? '',
+        checkoutUrl: env.nodeEnv === 'production'
+          ? (data.init_point ?? '')
+          : (data.sandbox_init_point ?? ''),
       };
-    }, 'createPixPayment');
+    }, 'createCheckoutPreference');
   }
 
-  async cancelPayment(mercadoPagoId: string): Promise<void> {
-    if (env.mercadoPagoMock) return;
-
-    await withRetry(async () => {
-      const response = await fetch(`https://api.mercadopago.com/v1/payments/${mercadoPagoId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env.mercadoPagoToken}`,
-        },
-        body: JSON.stringify({ status: 'cancelled' }),
-      });
-
-      if (response.status >= 500) {
-        throw new TypeError(`MP server error: ${response.status}`);
-      }
-    }, 'cancelPayment');
-  }
 }

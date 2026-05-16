@@ -34,8 +34,6 @@ model Payment {
   status          PaymentStatus @default(PENDING)
   mercadoPagoId   String?
   paymentLink     String?
-  qrCode          String?
-  qrCodeBase64    String?
   createdAt       DateTime      @default(now())
   quote           Quote         @relation(fields: [quoteId], references: [id])
 }

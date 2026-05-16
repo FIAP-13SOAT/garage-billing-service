@@ -11,8 +11,6 @@ export interface PaymentProps {
   status?: PaymentStatus;
   mercadoPagoId?: string;
   paymentLink?: string;
-  qrCode?: string;
-  qrCodeBase64?: string;
   createdAt?: Date;
 }
 
@@ -24,8 +22,6 @@ export class Payment {
   status: PaymentStatus;
   mercadoPagoId: string | null;
   paymentLink: string | null;
-  qrCode: string | null;
-  qrCodeBase64: string | null;
   readonly createdAt: Date;
 
   constructor(props: PaymentProps) {
@@ -36,8 +32,6 @@ export class Payment {
     this.status = props.status ?? PaymentStatus.PENDING;
     this.mercadoPagoId = props.mercadoPagoId ?? null;
     this.paymentLink = props.paymentLink ?? null;
-    this.qrCode = props.qrCode ?? null;
-    this.qrCodeBase64 = props.qrCodeBase64 ?? null;
     this.createdAt = props.createdAt ?? new Date();
   }
 

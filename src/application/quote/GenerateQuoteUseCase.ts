@@ -4,7 +4,7 @@ import { ItemType } from '../../domain/quote/ItemType.js';
 import { Payment } from '../../domain/payment/Payment.js';
 import type { QuoteGateway } from '../../adapters/outbound/database/QuoteGateway.js';
 import type { PaymentGateway } from '../../adapters/outbound/database/PaymentGateway.js';
-import type { MercadoPagoClient } from '../../adapters/outbound/mercadopago/MercadoPagoClient.js';
+import type { MercadoPagoClient, CheckoutItem } from '../../adapters/outbound/mercadopago/MercadoPagoClient.js';
 import type { UUID } from '../../shared/types/UUID.js';
 
 export type GenerateQuoteCommand = {
@@ -17,6 +17,8 @@ export type GenerateQuoteCommand = {
     type: ItemType;
   }[];
   payerEmail?: string;
+  payerFirstName?: string;
+  payerLastName?: string;
   payerDocument?: string;
 };
 
@@ -42,18 +44,36 @@ export class GenerateQuoteUseCase {
     const savedQuote = await this.quoteGateway.save(quote);
 
     const payer = command.payerEmail
-      ? { email: command.payerEmail, document: command.payerDocument }
+      ? {
+          email: command.payerEmail,
+          firstName: command.payerFirstName,
+          lastName: command.payerLastName,
+          document: command.payerDocument,
+        }
       : undefined;
-    const mpResult = await this.mercadoPagoClient.createPixPayment(savedQuote.totalAmount, payer);
+
+    const mpItems: CheckoutItem[] = savedQuote.items.map((i) => ({
+      id: i.id,
+      title: i.description,
+      description: i.description,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      categoryId: i.type === ItemType.SERVICE ? 'services' : 'vehicles',
+    }));
+
+    const mpResult = await this.mercadoPagoClient.createCheckoutPreference(
+      savedQuote.totalAmount,
+      savedQuote.serviceOrderId,
+      mpItems,
+      payer,
+    );
 
     const payment = new Payment({
       quoteId: savedQuote.id,
       serviceOrderId: savedQuote.serviceOrderId,
       amount: savedQuote.totalAmount,
-      mercadoPagoId: mpResult.mercadoPagoId,
-      paymentLink: mpResult.paymentLink,
-      qrCode: mpResult.qrCode,
-      qrCodeBase64: mpResult.qrCodeBase64,
+      mercadoPagoId: mpResult.preferenceId,
+      paymentLink: mpResult.checkoutUrl,
     });
     const savedPayment = await this.paymentGateway.save(payment);
 

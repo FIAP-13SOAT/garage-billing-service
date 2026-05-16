@@ -11,6 +11,7 @@ import type { CancelPaymentUseCase } from '../../../application/payment/CancelPa
 import type { BillingReplyProducer } from '../../outbound/messaging/BillingReplyProducer.js';
 import { ItemType } from '../../../domain/quote/ItemType.js';
 import { toUUID } from '../../../shared/types/UUID.js';
+import { Logger } from '../../../shared/logger/Logger.js';
 
 const QUEUE = 'billing.commands';
 
@@ -31,11 +32,11 @@ export class BillingCommandConsumer {
         await this.handle(type, payload);
         this.channel.ack(msg);
       } catch (err) {
-        console.error(`[BillingCommandConsumer] Failed to process message:`, err);
+        Logger.error('[BillingCommandConsumer] Failed to process message', { err });
         this.channel.nack(msg, false, false);
       }
     });
-    console.log(`[BillingCommandConsumer] Listening on ${QUEUE}`);
+    Logger.info('[BillingCommandConsumer] Listening', { queue: QUEUE });
   }
 
   private async handle(type: string, payload: unknown): Promise<void> {
@@ -47,7 +48,7 @@ export class BillingCommandConsumer {
         await this.handleCancelarPagamento(payload as CancelarPagamentoPayload);
         break;
       default:
-        console.warn(`[BillingCommandConsumer] Unknown message type: ${type}`);
+        Logger.warn('[BillingCommandConsumer] Unknown message type', { type });
     }
   }
 
@@ -62,6 +63,8 @@ export class BillingCommandConsumer {
         type: i.type === 'SERVICE' ? ItemType.SERVICE : ItemType.STOCK_ITEM,
       })),
       payerEmail: payload.payerEmail,
+      payerFirstName: payload.payerFirstName,
+      payerLastName: payload.payerLastName,
       payerDocument: payload.payerDocument,
     });
 
@@ -71,7 +74,6 @@ export class BillingCommandConsumer {
       paymentId: payment.id,
       totalAmount: quote.totalAmount,
       paymentLink: payment.paymentLink,
-      qrCode: payment.qrCode,
     });
   }
 

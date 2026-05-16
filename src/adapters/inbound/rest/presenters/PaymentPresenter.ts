@@ -8,8 +8,6 @@ type PaymentResponse = {
   status: string;
   mercadoPagoId: string | null;
   paymentLink: string | null;
-  qrCode: string | null;
-  qrCodeBase64: string | null;
   createdAt: string;
 };
 
@@ -23,8 +21,6 @@ export class PaymentPresenter {
       status: payment.status,
       mercadoPagoId: payment.mercadoPagoId,
       paymentLink: payment.paymentLink,
-      qrCode: payment.qrCode,
-      qrCodeBase64: payment.qrCodeBase64,
       createdAt: payment.createdAt.toISOString(),
     };
   }

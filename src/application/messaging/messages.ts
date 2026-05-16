@@ -37,6 +37,8 @@ export interface GerarOrcamentoPayload {
     type: 'SERVICE' | 'STOCK_ITEM';
   }>;
   payerEmail?: string;
+  payerFirstName?: string;
+  payerLastName?: string;
   payerDocument?: string;
 }
 
@@ -52,7 +54,6 @@ export interface OrcamentoGeradoPayload {
   paymentId: UUID;
   totalAmount: number;
   paymentLink: string | null;
-  qrCode: string | null;
 }
 
 export interface PagamentoConfirmadoPayload {

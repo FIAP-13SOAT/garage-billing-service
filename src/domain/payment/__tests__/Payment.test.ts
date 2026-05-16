@@ -28,25 +28,19 @@ describe('Payment', () => {
       expect(payment.status).toBe(PaymentStatus.CONFIRMED);
     });
 
-    it('defaults mercadoPagoId, paymentLink, qrCode and qrCodeBase64 to null', () => {
+    it('defaults mercadoPagoId and paymentLink to null', () => {
       const payment = makePayment();
       expect(payment.mercadoPagoId).toBeNull();
       expect(payment.paymentLink).toBeNull();
-      expect(payment.qrCode).toBeNull();
-      expect(payment.qrCodeBase64).toBeNull();
     });
 
-    it('preserves provided mercadoPagoId, paymentLink, qrCode and qrCodeBase64', () => {
+    it('preserves provided mercadoPagoId and paymentLink', () => {
       const payment = makePayment({
-        mercadoPagoId: 'MP-123',
-        paymentLink: 'https://mp/checkout/MP-123',
-        qrCode: 'BR-CODE',
-        qrCodeBase64: 'base64==',
+        mercadoPagoId: 'pref-123',
+        paymentLink: 'https://sandbox.mercadopago.com.br/checkout?pref_id=pref-123',
       });
-      expect(payment.mercadoPagoId).toBe('MP-123');
-      expect(payment.paymentLink).toBe('https://mp/checkout/MP-123');
-      expect(payment.qrCode).toBe('BR-CODE');
-      expect(payment.qrCodeBase64).toBe('base64==');
+      expect(payment.mercadoPagoId).toBe('pref-123');
+      expect(payment.paymentLink).toBe('https://sandbox.mercadopago.com.br/checkout?pref_id=pref-123');
     });
   });
 

@@ -4,6 +4,7 @@ import app from './app.js';
 import { connectDatabase, prisma } from './adapters/outbound/database/connection.js';
 import { getRabbitMQChannel } from './adapters/outbound/messaging/rabbitmq.js';
 import { env } from './shared/config/env.js';
+import { Logger } from './shared/logger/Logger.js';
 import { QuoteGateway } from './adapters/outbound/database/QuoteGateway.js';
 import { PaymentGateway } from './adapters/outbound/database/PaymentGateway.js';
 import { MercadoPagoClient } from './adapters/outbound/mercadopago/MercadoPagoClient.js';
@@ -25,18 +26,18 @@ const start = async (): Promise<void> => {
   const consumer = new BillingCommandConsumer(
     channel,
     new GenerateQuoteUseCase(quoteGateway, paymentGateway, mpClient),
-    new CancelPaymentUseCase(paymentGateway, mpClient),
+    new CancelPaymentUseCase(paymentGateway),
     replyProducer,
   );
 
   await consumer.start();
 
   app.listen(env.port, () => {
-    console.log(`garage-billing-service running on port ${env.port}`);
+    Logger.info(`garage-billing-service running on port ${env.port}`);
   });
 };
 
 start().catch((err) => {
-  console.error('Failed to start server:', err);
+  Logger.error('Failed to start server', { err });
   process.exit(1);
 });

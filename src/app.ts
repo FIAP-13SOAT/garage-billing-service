@@ -5,6 +5,7 @@ import quoteResource from './adapters/inbound/rest/routes/quoteResource.js';
 import paymentResource from './adapters/inbound/rest/routes/paymentResource.js';
 import webhookResource from './adapters/inbound/rest/routes/webhookResource.js';
 import { AppError } from './shared/errors/AppError.js';
+import { Logger } from './shared/logger/Logger.js';
 
 const app = express();
 
@@ -21,7 +22,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(err.statusCode).json({ error: err.message });
     return;
   }
-  console.error(err);
+  Logger.error('Unhandled error', { error: err });
   res.status(500).json({ error: 'Internal server error' });
 });
 
