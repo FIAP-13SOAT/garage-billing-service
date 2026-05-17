@@ -6,7 +6,9 @@ metadata:
 data:
   PORT: "8081"
   NODE_ENV: "production"
-  MERCADO_PAGO_MOCK: "false"
+  MERCADO_PAGO_MOCK: "true"
   DD_SERVICE: "garage-billing-service"
   DD_ENV: "production"
   DD_VERSION: "1.0.0"
+  DD_TRACE_ENABLED: "true"
+  DD_SITE: "us5.datadoghq.com"

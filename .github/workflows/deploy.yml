@@ -1,0 +1,114 @@
+name: Deploy — garage-billing-service
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 500431122450.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: garage-app
+  SERVICE: billing
+  DEPLOYMENT: garage-billing-service
+
+jobs:
+  deploy:
+    name: Build, push and deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_SHA="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-${{ github.sha }}"
+          IMAGE_LATEST="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-latest"
+          docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" .
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name garage-cluster
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Apply database schema (prisma db push)
+        run: |
+          npm ci --ignore-scripts
+          DB_HOST=$(aws ssm get-parameter \
+            --name /garage/prod/${{ env.SERVICE }}/db/endpoint \
+            --query Parameter.Value --output text)
+          SECRET_ARN=$(aws ssm get-parameter \
+            --name /garage/prod/${{ env.SERVICE }}/db/secret_arn \
+            --query Parameter.Value --output text)
+          DB_PASS=$(aws secretsmanager get-secret-value \
+            --secret-id "$SECRET_ARN" \
+            --query SecretString --output text | jq -r '.password')
+          export DATABASE_URL="postgresql://postgres:${DB_PASS}@${DB_HOST}/garage_${{ env.SERVICE }}?sslmode=require"
+          npx prisma db push --accept-data-loss
+
+      - name: Create / update K8s secrets
+        run: |
+          DB_HOST=$(aws ssm get-parameter \
+            --name /garage/prod/${{ env.SERVICE }}/db/endpoint \
+            --query Parameter.Value --output text)
+          SECRET_ARN=$(aws ssm get-parameter \
+            --name /garage/prod/${{ env.SERVICE }}/db/secret_arn \
+            --query Parameter.Value --output text)
+          DB_PASS=$(aws secretsmanager get-secret-value \
+            --secret-id "$SECRET_ARN" \
+            --query SecretString --output text | jq -r '.password')
+          DATABASE_URL="postgresql://postgres:${DB_PASS}@${DB_HOST}/garage_${{ env.SERVICE }}?sslmode=require"
+
+          MQ_ENDPOINT=$(aws ssm get-parameter \
+            --name /garage/prod/rabbitmq/endpoint \
+            --query Parameter.Value --output text)
+          MQ_HOST=$(echo "$MQ_ENDPOINT" | sed 's|amqps://||')
+          MQ_PASS=$(aws ssm get-parameter \
+            --name /garage/prod/rabbitmq/password \
+            --with-decryption --query Parameter.Value --output text)
+          RABBITMQ_URL="amqps://admin:${MQ_PASS}@${MQ_HOST}"
+
+          API_GW_URL=$(aws ssm get-parameter \
+            --name /garage/prod/api_gateway_url \
+            --query Parameter.Value --output text)
+          WEBHOOK_URL="${API_GW_URL}/webhook/mercadopago"
+
+          kubectl create secret generic garage-billing-service-secrets \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
+            --from-literal=RABBITMQ_URL="$RABBITMQ_URL" \
+            --from-literal=MERCADO_PAGO_ACCESS_TOKEN="${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}" \
+            --from-literal=MERCADO_PAGO_WEBHOOK_URL="$WEBHOOK_URL" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic datadog-secrets \
+            --from-literal=DD_API_KEY="${{ secrets.DD_API_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply K8s manifests
+        run: |
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/deployment.yaml
+
+      - name: Update deployment image
+        run: |
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-${{ github.sha }}"
+          kubectl set image deployment/${{ env.DEPLOYMENT }} \
+            ${{ env.DEPLOYMENT }}="$IMAGE"
+          kubectl rollout status deployment/${{ env.DEPLOYMENT }} --timeout=180s
