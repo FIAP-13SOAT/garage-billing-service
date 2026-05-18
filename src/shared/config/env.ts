@@ -2,7 +2,12 @@ export const env = {
   port: parseInt(process.env['PORT'] ?? '8081', 10),
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
   databaseUrl: process.env['DATABASE_URL'] ?? '',
-  rabbitmqUrl: process.env['RABBITMQ_URL'] ?? '',
+  awsRegion: process.env['AWS_REGION'] ?? 'us-east-1',
+  sqsQueues: {
+    billingCommands: process.env['SQS_BILLING_COMMANDS_URL'] ?? '',
+    billingReplies: process.env['SQS_BILLING_REPLIES_URL'] ?? '',
+  },
+  sqsEndpoint: process.env['SQS_ENDPOINT'],
   mercadoPagoMock: process.env['MERCADO_PAGO_MOCK'] === 'true',
   mercadoPagoToken: process.env['MERCADO_PAGO_ACCESS_TOKEN'] ?? '',
   mercadoPagoWebhookUrl: process.env['MERCADO_PAGO_WEBHOOK_URL'] ?? '',
