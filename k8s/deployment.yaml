@@ -29,11 +29,6 @@ spec:
                 secretKeyRef:
                   name: garage-billing-service-secrets
                   key: DATABASE_URL
-            - name: RABBITMQ_URL
-              valueFrom:
-                secretKeyRef:
-                  name: garage-billing-service-secrets
-                  key: RABBITMQ_URL
             - name: MERCADO_PAGO_ACCESS_TOKEN
               valueFrom:
                 secretKeyRef:
