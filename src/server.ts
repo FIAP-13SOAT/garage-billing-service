@@ -2,7 +2,7 @@ import 'dotenv/config';
 import './instrument.js';
 import app from './app.js';
 import { connectDatabase, prisma } from './adapters/outbound/database/connection.js';
-import { getRabbitMQChannel } from './adapters/outbound/messaging/rabbitmq.js';
+import { SQSBroker, sqsClient } from './adapters/outbound/messaging/SQSBroker.js';
 import { env } from './shared/config/env.js';
 import { Logger } from './shared/logger/Logger.js';
 import { QuoteGateway } from './adapters/outbound/database/QuoteGateway.js';
@@ -16,25 +16,27 @@ import { CancelPaymentUseCase } from './application/payment/CancelPaymentUseCase
 const start = async (): Promise<void> => {
   await connectDatabase();
 
-  const channel = await getRabbitMQChannel();
+  const broker = new SQSBroker(sqsClient);
+  const replyProducer = new BillingReplyProducer(broker);
 
-  const quoteGateway = new QuoteGateway(prisma);
-  const paymentGateway = new PaymentGateway(prisma);
-  const mpClient = new MercadoPagoClient();
-  const replyProducer = new BillingReplyProducer(channel);
-
-  const consumer = new BillingCommandConsumer(
-    channel,
-    new GenerateQuoteUseCase(quoteGateway, paymentGateway, mpClient),
-    new CancelPaymentUseCase(paymentGateway),
+  await new BillingCommandConsumer(
+    broker,
+    new GenerateQuoteUseCase(new QuoteGateway(prisma), new PaymentGateway(prisma), new MercadoPagoClient()),
+    new CancelPaymentUseCase(new PaymentGateway(prisma)),
     replyProducer,
-  );
+  ).start();
 
-  await consumer.start();
-
-  app.listen(env.port, () => {
+  const server = app.listen(env.port, () => {
     Logger.info(`garage-billing-service running on port ${env.port}`);
   });
+
+  const shutdown = (): void => {
+    broker.stop();
+    server.close();
+  };
+
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 };
 
 start().catch((err) => {

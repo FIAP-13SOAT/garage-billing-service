@@ -1,7 +1,7 @@
 FROM node:24-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --ignore-scripts
+RUN npm install --ignore-scripts
 COPY tsconfig.json prisma.config.ts ./
 COPY prisma ./prisma
 RUN npx prisma generate
@@ -15,7 +15,7 @@ ENV NODE_ENV=production \
     DD_ENV=production \
     DD_VERSION=1.0.0
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm install --omit=dev --ignore-scripts
 COPY prisma.config.ts ./
 COPY prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
