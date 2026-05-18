@@ -1,8 +1,16 @@
+import tracer from 'dd-trace';
 import { env } from '../config/env.js';
 
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
 type Context = Record<string, unknown>;
+
+function traceContext(): Record<string, string> {
+  const span = tracer.scope().active();
+  if (!span) return {};
+  const ctx = span.context();
+  return { 'dd.trace_id': ctx.toTraceId(), 'dd.span_id': ctx.toSpanId() };
+}
 
 function emit(level: Level, message: string, context?: Context): void {
   const entry = {
@@ -11,6 +19,7 @@ function emit(level: Level, message: string, context?: Context): void {
     service: env.datadog.service,
     env: env.datadog.env,
     message,
+    ...traceContext(),
     ...(context ?? {}),
   };
   const line = JSON.stringify(entry);

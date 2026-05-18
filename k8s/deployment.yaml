@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: garage-billing-service
-          image: <ECR_REGISTRY>/garage-billing-service:latest
+          image: 500431122450.dkr.ecr.us-east-1.amazonaws.com/garage-app:billing-latest
           ports:
             - containerPort: 8081
           envFrom:
@@ -39,6 +39,11 @@ spec:
                 secretKeyRef:
                   name: garage-billing-service-secrets
                   key: MERCADO_PAGO_ACCESS_TOKEN
+            - name: MERCADO_PAGO_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: garage-billing-service-secrets
+                  key: MERCADO_PAGO_WEBHOOK_URL
             - name: DD_API_KEY
               valueFrom:
                 secretKeyRef:
