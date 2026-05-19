@@ -54,15 +54,6 @@ jobs:
             --query SecretString --output text | jq -r '.password')
           DATABASE_URL="postgresql://postgres:${DB_PASS}@${DB_HOST}/garage_${{ env.SERVICE }}?sslmode=require"
 
-          MQ_ENDPOINT=$(aws ssm get-parameter \
-            --name /garage/prod/rabbitmq/endpoint \
-            --query Parameter.Value --output text)
-          MQ_HOST=$(echo "$MQ_ENDPOINT" | sed 's|amqps://||')
-          MQ_PASS=$(aws ssm get-parameter \
-            --name /garage/prod/rabbitmq/password \
-            --with-decryption --query Parameter.Value --output text)
-          RABBITMQ_URL="amqps://admin:${MQ_PASS}@${MQ_HOST}"
-
           API_GW_URL=$(aws ssm get-parameter \
             --name /garage/prod/api_gateway_url \
             --query Parameter.Value --output text)
@@ -70,7 +61,6 @@ jobs:
 
           kubectl create secret generic garage-billing-service-secrets \
             --from-literal=DATABASE_URL="$DATABASE_URL" \
-            --from-literal=RABBITMQ_URL="$RABBITMQ_URL" \
             --from-literal=MERCADO_PAGO_ACCESS_TOKEN="${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}" \
             --from-literal=MERCADO_PAGO_WEBHOOK_URL="$WEBHOOK_URL" \
             --dry-run=client -o yaml | kubectl apply -f -
