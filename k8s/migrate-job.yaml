@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: garage-billing-migrate-__IMAGE_TAG__
+  namespace: default
+  labels:
+    app: garage-billing-service
+    component: migrate
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: garage-billing-service
+        component: migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: prisma-migrate
+          image: 500431122450.dkr.ecr.us-east-1.amazonaws.com/garage-billing-service:billing-__IMAGE_TAG__
+          command: ["npx", "prisma", "db", "push", "--accept-data-loss"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: garage-billing-service-secrets
+                  key: DATABASE_URL
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "125m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000

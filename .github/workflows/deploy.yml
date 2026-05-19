@@ -41,26 +41,6 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name garage-cluster
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Apply database schema (prisma db push)
-        run: |
-          npm ci --ignore-scripts
-          DB_HOST=$(aws ssm get-parameter \
-            --name /garage/prod/${{ env.SERVICE }}/db/endpoint \
-            --query Parameter.Value --output text)
-          SECRET_ARN=$(aws ssm get-parameter \
-            --name /garage/prod/${{ env.SERVICE }}/db/secret_arn \
-            --query Parameter.Value --output text)
-          DB_PASS=$(aws secretsmanager get-secret-value \
-            --secret-id "$SECRET_ARN" \
-            --query SecretString --output text | jq -r '.password')
-          export DATABASE_URL="postgresql://postgres:${DB_PASS}@${DB_HOST}/garage_${{ env.SERVICE }}?sslmode=require"
-          npx prisma db push --accept-data-loss
-
       - name: Create / update K8s secrets
         run: |
           DB_HOST=$(aws ssm get-parameter \
@@ -98,6 +78,20 @@ jobs:
           kubectl create secret generic datadog-secrets \
             --from-literal=DD_API_KEY="${{ secrets.DD_API_KEY }}" \
             --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply database schema (prisma db push via K8s Job)
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          JOB_NAME="garage-billing-migrate-${IMAGE_TAG}"
+          sed "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/migrate-job.yaml | kubectl apply -f -
+          kubectl wait --for=condition=complete --timeout=300s "job/${JOB_NAME}" &
+          COMPLETE_PID=$!
+          kubectl wait --for=condition=failed --timeout=300s "job/${JOB_NAME}" && exit 1 &
+          FAIL_PID=$!
+          wait -n $COMPLETE_PID $FAIL_PID
+          EXIT=$?
+          kubectl logs "job/${JOB_NAME}" --tail=200 || true
+          exit $EXIT
 
       - name: Apply K8s manifests
         run: |
