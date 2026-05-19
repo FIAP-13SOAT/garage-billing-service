@@ -7,7 +7,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 500431122450.dkr.ecr.us-east-1.amazonaws.com
-  ECR_REPOSITORY: garage-app
+  ECR_REPOSITORY: garage-auth-service
   SERVICE: billing
   DEPLOYMENT: garage-billing-service
 
