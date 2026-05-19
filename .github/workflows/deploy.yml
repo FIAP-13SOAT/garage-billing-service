@@ -74,14 +74,39 @@ jobs:
           IMAGE_TAG="${{ github.sha }}"
           JOB_NAME="garage-billing-migrate-${IMAGE_TAG}"
           sed "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/migrate-job.yaml | kubectl apply -f -
-          kubectl wait --for=condition=complete --timeout=300s "job/${JOB_NAME}" &
-          COMPLETE_PID=$!
-          kubectl wait --for=condition=failed --timeout=300s "job/${JOB_NAME}" && exit 1 &
-          FAIL_PID=$!
-          wait -n $COMPLETE_PID $FAIL_PID
-          EXIT=$?
-          kubectl logs "job/${JOB_NAME}" --tail=200 || true
-          exit $EXIT
+
+          echo "::group::Waiting for job ${JOB_NAME}"
+          DEADLINE=$(( $(date +%s) + 300 ))
+          STATUS="pending"
+          while [ $(date +%s) -lt $DEADLINE ]; do
+            if kubectl get job "${JOB_NAME}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep -q True; then
+              STATUS="complete"; break
+            fi
+            if kubectl get job "${JOB_NAME}" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' | grep -q True; then
+              STATUS="failed"; break
+            fi
+            sleep 5
+          done
+          echo "Final job status: ${STATUS}"
+          echo "::endgroup::"
+
+          echo "::group::Job describe"
+          kubectl describe "job/${JOB_NAME}" || true
+          echo "::endgroup::"
+
+          echo "::group::Pod describe"
+          kubectl describe pod -l job-name="${JOB_NAME}" || true
+          echo "::endgroup::"
+
+          echo "::group::Pod logs"
+          kubectl logs "job/${JOB_NAME}" --tail=500 --all-containers=true || true
+          echo "::endgroup::"
+
+          if [ "${STATUS}" = "complete" ]; then
+            exit 0
+          fi
+          echo "Migration job did not complete (status=${STATUS})"
+          exit 1
 
       - name: Apply K8s manifests
         run: |
