@@ -128,7 +128,7 @@ npm run dev
 
 O serviço sobe na porta `8081` por padrão.
 
-## Testes
+## Testes automatizados
 
 ```bash
 # Executar todos os testes
