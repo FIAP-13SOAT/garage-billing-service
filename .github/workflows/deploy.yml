@@ -98,8 +98,21 @@ jobs:
           kubectl describe pod -l job-name="${JOB_NAME}" || true
           echo "::endgroup::"
 
-          echo "::group::Pod logs"
-          kubectl logs "job/${JOB_NAME}" --tail=500 --all-containers=true || true
+          echo "::group::Recent events"
+          kubectl get events --sort-by=.lastTimestamp \
+            --field-selector "involvedObject.kind=Pod" \
+            -o jsonpath='{range .items[?(@.involvedObject.name)]}{.lastTimestamp}{"\t"}{.involvedObject.name}{"\t"}{.reason}{"\t"}{.message}{"\n"}{end}' \
+            | grep "${JOB_NAME}" || kubectl get events --sort-by=.lastTimestamp | tail -30 || true
+          echo "::endgroup::"
+
+          echo "::group::Termination messages (apiserver, bypasses kubelet)"
+          kubectl get pod -l job-name="${JOB_NAME}" \
+            -o jsonpath='{range .items[*]}=== {.metadata.name} ==={"\n"}{.status.containerStatuses[*].state.terminated.message}{"\n\n"}{end}' \
+            || true
+          echo "::endgroup::"
+
+          echo "::group::Pod logs (via kubelet, may fail with TLS error)"
+          kubectl logs "job/${JOB_NAME}" --tail=500 --all-containers=true --insecure-skip-tls-verify-backend=true || true
           echo "::endgroup::"
 
           if [ "${STATUS}" = "complete" ]; then
