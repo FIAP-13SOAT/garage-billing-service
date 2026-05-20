@@ -7,7 +7,7 @@ router.get('/', (_req, res) => {
 });
 
 router.get('/version', (_req, res) => {
-  res.json({ version: '1.1.0', service: 'garage-billing-service' });
+  res.json({ version: '1.2.0', service: 'garage-billing-service' });
 });
 
 export default router;
