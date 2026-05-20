@@ -21,4 +21,4 @@ COPY --from=builder /app/dist ./dist
 RUN chown -R node:node /app
 EXPOSE 8081
 USER node
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/server.js"]
