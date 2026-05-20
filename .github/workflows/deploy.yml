@@ -51,7 +51,7 @@ jobs:
             --query Parameter.Value --output text)
           DB_PASS=$(aws secretsmanager get-secret-value \
             --secret-id "$SECRET_ARN" \
-            --query SecretString --output text | jq -r '.password')
+            --query SecretString --output text | jq -r '.password | @uri')
           DATABASE_URL="postgresql://postgres:${DB_PASS}@${DB_HOST}/garage_${{ env.SERVICE }}?sslmode=require"
 
           API_GW_URL=$(aws ssm get-parameter \
