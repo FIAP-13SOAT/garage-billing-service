@@ -18,7 +18,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: prisma-migrate
-          image: 500431122450.dkr.ecr.us-east-1.amazonaws.com/garage-billing-service:billing-__IMAGE_TAG__
+          image: __ECR_REGISTRY__/garage-billing-service:billing-__IMAGE_TAG__
           command: ["npx", "prisma", "db", "push", "--accept-data-loss"]
           terminationMessagePolicy: FallbackToLogsOnError
           env:
