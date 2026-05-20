@@ -6,7 +6,6 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REGISTRY: 500431122450.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: garage-billing-service
   SERVICE: billing
   DEPLOYMENT: garage-billing-service
@@ -28,12 +27,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push Docker image
         run: |
-          IMAGE_SHA="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-${{ github.sha }}"
-          IMAGE_LATEST="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-latest"
+          IMAGE_SHA="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-${{ github.sha }}"
+          IMAGE_LATEST="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-latest"
           docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" .
           docker push "$IMAGE_SHA"
           docker push "$IMAGE_LATEST"
@@ -130,7 +130,7 @@ jobs:
 
       - name: Update deployment image
         run: |
-          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-${{ github.sha }}"
+          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.SERVICE }}-${{ github.sha }}"
           kubectl set image deployment/${{ env.DEPLOYMENT }} \
             ${{ env.DEPLOYMENT }}="$IMAGE"
           kubectl rollout status deployment/${{ env.DEPLOYMENT }} --timeout=180s
